@@ -6,8 +6,8 @@ Features:
   - Pre-indexed, cached multi-store filtering & sorting across 25,000+ PC games
   - Compact, streamlined "Explore & Genres" popover panel
   - Tactile mouse hover & click-press micro-interactions on all buttons, pills, and cards
-  - Live official key-art resolver for non-Steam titles (VALORANT, LoL, Fortnite, WoW,
-    Alan Wake 2, Genshin Impact, Overwatch 2) + multi-CDN CSS fallbacks (zero black screens)
+  - Official widescreen key-art resolver via Epic Games Store Catalog API, Blizzard media,
+    and Valve Steam CDN headers (no map splashes, no transparent logos, no black boxes)
   - Isolated Insights & Charts page with honest 0–100% bar scale, leader-line donut,
     de-overplotted scatter, data-synced takeaways, and CSV dataset downloads
 """
@@ -102,36 +102,109 @@ def clean_plain_review(raw: str, max_len: int = 380) -> str:
 
 
 # ===========================================================================
-# OFFICIAL KEY-ART RESOLVER FOR NON-STEAM GAMES + MULTI-CDN COVER STACK
+# OFFICIAL WIDESCREEN KEY-ART RESOLVER (EPIC CATALOG + BLIZZARD + STEAM CDN)
 # ===========================================================================
-OFFICIAL_GAME_PAGES = {
-    "valorant": "https://playvalorant.com/en-us/",
-    "league of legends": "https://www.leagueoflegends.com/en-us/",
-    "teamfight tactics": "https://teamfighttactics.leagueoflegends.com/en-us/",
-    "legends of runeterra": "https://playruneterra.com/en-us/",
-    "fortnite": "https://www.fortnite.com/",
-    "alan wake 2": "https://www.alanwake.com/",
-    "world of warcraft": "https://worldofwarcraft.blizzard.com/en-us/",
-    "hearthstone": "https://hearthstone.blizzard.com/en-us/",
-    "genshin impact": "https://genshin.hoyoverse.com/en/",
-    "honkai: star rail": "https://hsr.hoyoverse.com/en-us/",
-    "wuthering waves": "https://wutheringwaves.kurogames.com/en/",
+EPIC_CATALOG_TITLES = {
+    "valorant": "VALORANT",
+    "league of legends": "League of Legends",
+    "teamfight tactics": "Teamfight Tactics",
+    "legends of runeterra": "Legends of Runeterra",
+    "fortnite": "Fortnite",
+    "alan wake 2": "Alan Wake 2",
+    "genshin impact": "Genshin Impact",
+    "honkai: star rail": "Honkai: Star Rail",
+    "wuthering waves": "Wuthering Waves",
 }
 
-DIRECT_VERIFIED_COVERS = {
+BLIZZARD_OFFICIAL_PAGES = {
+    "world of warcraft": "https://worldofwarcraft.blizzard.com/en-us/",
+    "hearthstone": "https://hearthstone.blizzard.com/en-us/",
+}
+
+DIRECT_STEAM_HEADER_COVERS = {
     # Overwatch 2 is officially on Steam (AppID 2357570)
     "overwatch 2": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/2357570/header.jpg",
 }
 
 
-def _fetch_og_image_from_page(page_url: str) -> str:
+def _fetch_epic_wide_key_art(search_title: str) -> str:
+    """
+    Fetches the official 16:9 widescreen store banner (OfferImageWide / DieselGameBoxWide)
+    from Epic Games Store's public catalog GraphQL endpoint—never a transparent logo.
+    """
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36"
+        ),
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+    }
+    query = """
+    query searchStoreQuery($keywords: String!, $country: String!, $locale: String!) {
+      Catalog {
+        searchStoreElements(keywords: $keywords, country: $country, locale: $locale, count: 6) {
+          elements {
+            title
+            keyImages {
+              type
+              url
+            }
+          }
+        }
+      }
+    }
+    """
+    payload = {
+        "query": query,
+        "variables": {
+            "keywords": search_title,
+            "country": "US",
+            "locale": "en-US",
+        },
+    }
+    try:
+        resp = requests.post(
+            "https://store.epicgames.com/graphql",
+            json=payload,
+            headers=headers,
+            timeout=4.5,
+        )
+        if resp.status_code == 200:
+            elements = (
+                resp.json()
+                .get("data", {})
+                .get("Catalog", {})
+                .get("searchStoreElements", {})
+                .get("elements", [])
+            )
+            target_low = search_title.strip().lower()
+            # Prefer exact title match first, then first element
+            ordered_elems = sorted(
+                elements,
+                key=lambda el: 0 if str(el.get("title", "")).strip().lower() == target_low else 1,
+            )
+            wide_priority = ("OfferImageWide", "DieselGameBoxWide", "Featured", "DieselStoreFrontWide")
+            for el in ordered_elems:
+                imgs = el.get("keyImages") or []
+                for img_type in wide_priority:
+                    for im in imgs:
+                        if im.get("type") == img_type and im.get("url"):
+                            u = str(im["url"]).strip()
+                            if u.startswith("http"):
+                                return u
+    except Exception:
+        pass
+    return ""
+
+
+def _fetch_blizzard_key_art(page_url: str) -> str:
     headers = {
         "User-Agent": (
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
             "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36"
         ),
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Accept-Language": "en-US,en;q=0.9",
     }
     try:
         resp = requests.get(page_url, headers=headers, timeout=4.0, allow_redirects=True)
@@ -142,7 +215,6 @@ def _fetch_og_image_from_page(page_url: str) -> str:
             r'<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)["\']',
             r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+property=["\']og:image["\']',
             r'<meta[^>]+name=["\']twitter:image["\'][^>]+content=["\']([^"\']+)["\']',
-            r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+name=["\']twitter:image["\']',
         ]
         for pat in patterns:
             m = re.search(pat, html_doc, flags=re.IGNORECASE)
@@ -152,7 +224,8 @@ def _fetch_og_image_from_page(page_url: str) -> str:
                     img_u = "https:" + img_u
                 elif img_u.startswith("/"):
                     img_u = urllib.parse.urljoin(resp.url, img_u)
-                if img_u.startswith("http"):
+                low_u = img_u.lower()
+                if img_u.startswith("http") and "logo" not in low_u and "icon" not in low_u:
                     return img_u
     except Exception:
         pass
@@ -161,18 +234,24 @@ def _fetch_og_image_from_page(page_url: str) -> str:
 
 @st.cache_data(ttl=86400, show_spinner=False)
 def get_official_non_steam_covers() -> dict[str, str]:
-    resolved = dict(DIRECT_VERIFIED_COVERS)
-    with ThreadPoolExecutor(max_workers=8) as pool:
-        fut_map = {
-            pool.submit(_fetch_og_image_from_page, url): title_key
-            for title_key, url in OFFICIAL_GAME_PAGES.items()
+    resolved = dict(DIRECT_STEAM_HEADER_COVERS)
+    with ThreadPoolExecutor(max_workers=10) as pool:
+        epic_futs = {
+            pool.submit(_fetch_epic_wide_key_art, disp_name): t_key
+            for t_key, disp_name in EPIC_CATALOG_TITLES.items()
         }
-        for fut in as_completed(fut_map):
-            t_key = fut_map[fut]
+        blizz_futs = {
+            pool.submit(_fetch_blizzard_key_art, url): t_key
+            for t_key, url in BLIZZARD_OFFICIAL_PAGES.items()
+        }
+        for fut in as_completed({**epic_futs, **blizz_futs}):
+            t_key = epic_futs.get(fut) or blizz_futs.get(fut)
+            if not t_key:
+                continue
             try:
-                og_url = fut.result()
-                if og_url:
-                    resolved[t_key] = og_url
+                art_url = fut.result()
+                if art_url:
+                    resolved[t_key] = art_url
             except Exception:
                 pass
     return resolved
@@ -180,10 +259,10 @@ def get_official_non_steam_covers() -> dict[str, str]:
 
 def resolve_cover_urls(row: pd.Series) -> list[str]:
     """
-    Returns an ordered priority list of cover URLs for a game:
-      1. Live official key-art URL (for non-Steam titles)
-      2. Catalog header_image (if valid)
-      3. Current Valve Steam CDN URLs (for any Steam AppID so expired timestamps never black-screen)
+    Returns an ordered priority list of official widescreen cover URLs:
+      1. Live official widescreen store banner (Epic OfferImageWide / DieselGameBoxWide / Blizzard)
+      2. Current Valve Steam 460x215 header CDN (for any Steam AppID)
+      3. Catalog header_image backup (if valid)
     """
     urls: list[str] = []
     nm_key = str(row.get("name", "")).strip().lower()
@@ -193,12 +272,6 @@ def resolve_cover_urls(row: pd.Series) -> list[str]:
     if nm_key in official_map and official_map[nm_key]:
         urls.append(official_map[nm_key])
 
-    raw_val = row.get("header_image")
-    raw_url = "" if pd.isna(raw_val) else str(raw_val).strip()
-    if raw_url.lower() not in ("", "nan", "none", "null") and raw_url.startswith("http"):
-        if raw_url not in urls:
-            urls.append(raw_url)
-
     if 0 < aid < 9000000 and nm_key not in NON_STEAM_EXCLUSIVES:
         steam_primary = f"https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/{aid}/header.jpg"
         steam_backup = f"https://cdn.cloudflare.steamstatic.com/steam/apps/{aid}/header.jpg"
@@ -206,37 +279,51 @@ def resolve_cover_urls(row: pd.Series) -> list[str]:
             if u not in urls:
                 urls.append(u)
 
+    raw_val = row.get("header_image")
+    raw_url = "" if pd.isna(raw_val) else str(raw_val).strip()
+    if raw_url.lower() not in ("", "nan", "none", "null") and raw_url.startswith("http"):
+        if raw_url not in urls:
+            urls.append(raw_url)
+
     return urls
 
 
 def render_cover_art(row: pd.Series, variant: str = "card") -> str:
     """
-    Renders a zero-JS multi-layer cover container:
-      - Bottom layer: Styled HTML/CSS title banner (visible only if all CDNs fail)
-      - Top layer: CSS3 stacked background-image URLs (passes Streamlit DOMPurify cleanly)
+    Renders a clean, full-bleed widescreen cover container:
+      - When official cover URLs exist: renders CSS3 stacked background-image layers with
+        background-size: cover and NO text underneath (prevents any bleed-through).
+      - Only if zero URLs exist: renders a clean styled title badge.
     """
     g_name = str(row.get("name", "PC Game")).strip() or "PC Game"
-    stores_val = row.get("verified_stores")
-    if pd.isna(stores_val) or not str(stores_val).strip():
-        stores_list = detect_verified_stores(
-            name=g_name,
-            appid=int(row.get("appid", 0) or 0),
-            publishers=str(row.get("publishers", "")),
-            developers=str(row.get("developers", "")),
-        )
-        stores_str = " • ".join(stores_list)
-    else:
-        stores_str = str(stores_val).replace("|", " • ")
-
     cover_urls = resolve_cover_urls(row)
-    bg_size = "contain" if variant == "spot" else "cover"
+
     if cover_urls:
-        bg_stack = ", ".join([f"url('{html.escape(u)}')" for u in cover_urls])
-        photo_layer = (
-            f'<div class="cover-photo-layer" style="background-image: {bg_stack}; background-size: {bg_size};"></div>'
+        bg_layers = [f"url('{html.escape(u)}')" for u in cover_urls]
+        bg_layers.append("linear-gradient(135deg, #1e1b4b 0%, #0f172a 55%, #311042 100%)")
+        bg_stack = ", ".join(bg_layers)
+        inner_html = (
+            f'<div class="cover-photo-layer" '
+            f'style="background-image: {bg_stack}; background-size: cover; background-position: center center;"></div>'
         )
     else:
-        photo_layer = ""
+        stores_val = row.get("verified_stores")
+        if pd.isna(stores_val) or not str(stores_val).strip():
+            stores_list = detect_verified_stores(
+                name=g_name,
+                appid=int(row.get("appid", 0) or 0),
+                publishers=str(row.get("publishers", "")),
+                developers=str(row.get("developers", "")),
+            )
+            stores_str = " • ".join(stores_list)
+        else:
+            stores_str = str(stores_val).replace("|", " • ")
+        inner_html = (
+            f'<div class="cover-fallback-art">'
+            f'<div class="cfb-title">{html.escape(g_name[:30].upper())}</div>'
+            f'<div class="cfb-sub">{html.escape(stores_str[:36].upper())}</div>'
+            f'</div>'
+        )
 
     if variant == "spot":
         wrap_cls = "spot-media-col"
@@ -248,15 +335,7 @@ def render_cover_art(row: pd.Series, variant: str = "card") -> str:
         wrap_cls = "card-img-wrap"
         extra_style = ""
 
-    return (
-        f'<div class="{wrap_cls}"{extra_style}>'
-        f'<div class="cover-fallback-art">'
-        f'<div class="cfb-title">{html.escape(g_name[:30].upper())}</div>'
-        f'<div class="cfb-sub">{html.escape(stores_str[:36].upper())}</div>'
-        f'</div>'
-        f'{photo_layer}'
-        f'</div>'
-    )
+    return f'<div class="{wrap_cls}"{extra_style}>{inner_html}</div>'
 
 
 # ===========================================================================
@@ -972,7 +1051,7 @@ span[data-baseweb="tag"] {
     font-weight: 700;
 }
 
-/* Layered Zero-JS Cover Frame (Fallback Gradient Card + Multi-CDN Photo Overlay) */
+/* Full-Bleed Widescreen Cover Frame (Zero Bleed-Through) */
 .cover-fallback-art {
     position: absolute;
     inset: 0;
@@ -986,7 +1065,6 @@ span[data-baseweb="tag"] {
     justify-content: center;
     padding: 14px;
     text-align: center;
-    z-index: 1;
 }
 .cfb-title {
     font-family: 'Plus Jakarta Sans', sans-serif;
@@ -1014,10 +1092,10 @@ span[data-baseweb="tag"] {
     inset: 0;
     background-position: center center;
     background-repeat: no-repeat;
-    z-index: 2;
+    background-size: cover;
 }
 
-/* Fixed-Height Atomic Spotlight Card — Uncropped Cover Art */
+/* Fixed-Height Atomic Spotlight Card — Full-Bleed Cover Art */
 .spotlight-unified {
     background: linear-gradient(135deg, #111b33 0%, #1a1638 55%, #0f2238 100%);
     border: 1px solid rgba(96, 165, 250, 0.36);
