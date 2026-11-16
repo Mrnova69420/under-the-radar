@@ -4,10 +4,11 @@ Under the Radar — Fast, Verified Multi-Store PC Game Discovery
 Features:
   - Fragment-isolated Spotlight & Catalog for ~20ms carousel turns and instant sorting
   - Pre-indexed, cached multi-store filtering & sorting across 25,000+ PC games
-  - Compact, streamlined "Explore & Genres" popover panel (zero bulky 3-column sprawl)
+  - Compact, streamlined "Explore & Genres" popover panel
   - Tactile mouse hover & click-press micro-interactions on all buttons, pills, and cards
   - Uncropped Spotlight cover art, centered carousel dots, and uniform 460:215 card framing
-  - Isolated Insights & Charts page with Gem Score methodology breakdown + 3 interactive charts
+  - Isolated Insights & Charts page with honest 0–100% bar scale, leader-line donut,
+    de-overplotted scatter, data-synced takeaways, and CSV dataset downloads
 """
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -40,7 +41,6 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
-# Fragment decorator with graceful fallback for older Streamlit versions
 _fragment = getattr(st, "fragment", None) or getattr(st, "experimental_fragment", None) or (lambda fn: fn)
 
 DATA_PATH = "data/steam_catalog.csv"
@@ -621,45 +621,51 @@ div[data-testid="stMainBlockContainer"] {
 
 /* TACTILE, MOUSE-REACTIVE BUTTON SYSTEM (CRISP HOVER + CLICK PRESS) */
 div.stButton > button,
-div[data-testid="stPopover"] > button {
+div[data-testid="stPopover"] > button,
+div[data-testid="stDownloadButton"] > button {
     min-height: 42px !important;
     height: 42px !important;
     border-radius: 10px !important;
     font-family: 'Inter', sans-serif !important;
-    font-size: 0.84rem !important;
+    font-size: 0.85rem !important;
     font-weight: 600 !important;
     letter-spacing: -0.01em !important;
     cursor: pointer !important;
     transition: transform 0.11s ease-out, background-color 0.14s ease, border-color 0.14s ease, box-shadow 0.14s ease, color 0.14s ease !important;
 }
 
-div.stButton > button[kind="primary"] {
+div.stButton > button[kind="primary"],
+div[data-testid="stDownloadButton"] > button[kind="primary"] {
     background: linear-gradient(135deg, #2563eb 0%, #4f46e5 100%) !important;
     border: 1px solid rgba(147, 197, 253, 0.55) !important;
     color: #ffffff !important;
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.24), 0 3px 10px rgba(37, 99, 235, 0.30) !important;
 }
-div.stButton > button[kind="primary"]:hover {
+div.stButton > button[kind="primary"]:hover,
+div[data-testid="stDownloadButton"] > button[kind="primary"]:hover {
     background: linear-gradient(135deg, #3b82f6 0%, #6366f1 100%) !important;
     border-color: #bfdbfe !important;
     transform: translateY(-1px) !important;
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.32), 0 6px 18px rgba(59, 130, 246, 0.46) !important;
 }
-div.stButton > button[kind="primary"]:active {
+div.stButton > button[kind="primary"]:active,
+div[data-testid="stDownloadButton"] > button[kind="primary"]:active {
     transform: translateY(1px) scale(0.985) !important;
     box-shadow: 0 2px 6px rgba(37, 99, 235, 0.35) !important;
     transition-duration: 0.05s !important;
 }
 
 div.stButton > button[kind="secondary"],
-div[data-testid="stPopover"] > button {
+div[data-testid="stPopover"] > button,
+div[data-testid="stDownloadButton"] > button[kind="secondary"] {
     background: rgba(24, 34, 58, 0.90) !important;
     border: 1px solid rgba(99, 125, 175, 0.36) !important;
     color: #e2e8f0 !important;
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06) !important;
 }
 div.stButton > button[kind="secondary"]:hover,
-div[data-testid="stPopover"] > button:hover {
+div[data-testid="stPopover"] > button:hover,
+div[data-testid="stDownloadButton"] > button[kind="secondary"]:hover {
     background: rgba(37, 99, 235, 0.28) !important;
     border-color: #60a5fa !important;
     color: #ffffff !important;
@@ -667,7 +673,8 @@ div[data-testid="stPopover"] > button:hover {
     box-shadow: 0 4px 14px rgba(37, 99, 235, 0.24) !important;
 }
 div.stButton > button[kind="secondary"]:active,
-div[data-testid="stPopover"] > button:active {
+div[data-testid="stPopover"] > button:active,
+div[data-testid="stDownloadButton"] > button[kind="secondary"]:active {
     background: rgba(37, 99, 235, 0.38) !important;
     transform: translateY(1px) scale(0.985) !important;
     transition-duration: 0.05s !important;
@@ -691,13 +698,13 @@ div[data-testid="stPopoverBody"] {
 div[data-testid="stPopoverBody"] div.stButton > button {
     min-height: 34px !important;
     height: 34px !important;
-    font-size: 0.79rem !important;
+    font-size: 0.8rem !important;
     border-radius: 8px !important;
     padding: 0 10px !important;
 }
 .mega-sec-title {
     font-family: 'Plus Jakarta Sans', sans-serif;
-    font-size: 0.73rem;
+    font-size: 0.76rem;
     font-weight: 800;
     letter-spacing: 0.08em;
     text-transform: uppercase;
@@ -788,20 +795,20 @@ span[data-baseweb="tag"] {
     line-height: 1.15;
 }
 .radar-sub {
-    color: #cbd5e1;
-    font-size: 0.82rem;
+    color: #e2e8f0;
+    font-size: 0.85rem;
     margin: 3px 0 0 0;
 }
 .epic-gift-pill {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    background: rgba(245, 158, 11, 0.18);
-    border: 1px solid rgba(251, 191, 36, 0.48);
+    background: rgba(245, 158, 11, 0.2);
+    border: 1px solid rgba(251, 191, 36, 0.5);
     color: #fef3c7;
     padding: 6px 14px;
     border-radius: 999px;
-    font-size: 0.8rem;
+    font-size: 0.82rem;
     font-weight: 700;
 }
 
@@ -843,7 +850,7 @@ span[data-baseweb="tag"] {
     min-width: 0;
 }
 .spot-kicker {
-    font-size: 0.74rem;
+    font-size: 0.76rem;
     font-weight: 800;
     text-transform: uppercase;
     letter-spacing: 0.09em;
@@ -876,7 +883,7 @@ span[data-baseweb="tag"] {
     border: 1px solid rgba(52, 211, 153, 0.5);
     color: #a7f3d0;
     font-family: 'JetBrains Mono', monospace;
-    font-size: 0.77rem;
+    font-size: 0.78rem;
     font-weight: 700;
     padding: 3px 10px;
     border-radius: 7px;
@@ -886,7 +893,7 @@ span[data-baseweb="tag"] {
     border: 1px solid rgba(96, 165, 250, 0.5);
     color: #bfdbfe;
     font-family: 'JetBrains Mono', monospace;
-    font-size: 0.77rem;
+    font-size: 0.78rem;
     font-weight: 700;
     padding: 3px 10px;
     border-radius: 7px;
@@ -895,7 +902,7 @@ span[data-baseweb="tag"] {
     background: rgba(245, 158, 11, 0.2);
     border: 1px solid rgba(251, 191, 36, 0.5);
     color: #fef08a;
-    font-size: 0.77rem;
+    font-size: 0.78rem;
     font-weight: 700;
     padding: 3px 10px;
     border-radius: 7px;
@@ -904,13 +911,13 @@ span[data-baseweb="tag"] {
     background: rgba(139, 92, 246, 0.22);
     border: 1px solid rgba(167, 139, 250, 0.48);
     color: #ede9fe;
-    font-size: 0.77rem;
+    font-size: 0.78rem;
     font-weight: 600;
     padding: 3px 10px;
     border-radius: 7px;
 }
 .spot-desc {
-    font-size: 0.87rem;
+    font-size: 0.88rem;
     color: #e2e8f0;
     line-height: 1.45;
     margin: 7px 0 8px 0;
@@ -920,11 +927,11 @@ span[data-baseweb="tag"] {
     overflow: hidden;
 }
 .spot-insight {
-    background: rgba(11, 17, 32, 0.78);
+    background: rgba(11, 17, 32, 0.82);
     border-left: 3px solid #3b82f6;
     padding: 7px 12px;
     border-radius: 8px;
-    font-size: 0.81rem;
+    font-size: 0.83rem;
     color: #e0f2fe;
     margin-bottom: 8px;
     white-space: nowrap;
@@ -937,7 +944,7 @@ span[data-baseweb="tag"] {
     align-items: center;
     height: 42px;
     letter-spacing: 7px;
-    font-size: 0.92rem;
+    font-size: 0.94rem;
     color: #60a5fa;
 }
 
@@ -950,12 +957,12 @@ span[data-baseweb="tag"] {
 
 /* Concise Single-Line AAA Banner */
 .aaa-mode-banner {
-    background: linear-gradient(90deg, rgba(16, 185, 129, 0.16) 0%, rgba(59, 130, 246, 0.14) 100%);
-    border: 1px solid rgba(52, 211, 153, 0.42);
+    background: linear-gradient(90deg, rgba(16, 185, 129, 0.18) 0%, rgba(59, 130, 246, 0.15) 100%);
+    border: 1px solid rgba(52, 211, 153, 0.45);
     border-radius: 10px;
-    padding: 8px 14px;
+    padding: 9px 14px;
     margin: 10px 0 6px 0;
-    font-size: 0.85rem;
+    font-size: 0.87rem;
     color: #ecfdf5;
     display: flex;
     flex-wrap: wrap;
@@ -975,7 +982,7 @@ span[data-baseweb="tag"] {
     justify-content: space-between;
     align-items: center;
     gap: 10px;
-    font-size: 0.88rem;
+    font-size: 0.9rem;
     color: #e2e8f0;
     margin: 10px 0 12px 0;
     padding: 6px 4px;
@@ -992,19 +999,19 @@ span[data-baseweb="tag"] {
 .filter-chip-pill {
     display: inline-flex;
     align-items: center;
-    background: rgba(37, 99, 235, 0.24);
-    border: 1px solid rgba(96, 165, 250, 0.52);
+    background: rgba(37, 99, 235, 0.26);
+    border: 1px solid rgba(96, 165, 250, 0.55);
     color: #f0f9ff;
-    font-size: 0.8rem;
+    font-size: 0.82rem;
     font-weight: 600;
-    padding: 2px 10px;
+    padding: 3px 10px;
     border-radius: 999px;
 }
 
 /* Game Cards + Consistent 460:215 Image Frame */
 div[data-testid="stVerticalBlockBorderWrapper"] {
     background: linear-gradient(175deg, #10182b 0%, #0b1120 100%) !important;
-    border: 1px solid rgba(99, 125, 175, 0.24) !important;
+    border: 1px solid rgba(99, 125, 175, 0.26) !important;
     border-radius: 16px !important;
     padding: 14px !important;
     margin-bottom: 14px !important;
@@ -1042,15 +1049,15 @@ div[data-testid="stVerticalBlockBorderWrapper"]:hover {
 }
 .card-title {
     font-family: 'Plus Jakarta Sans', sans-serif;
-    font-size: 1.06rem;
+    font-size: 1.07rem;
     font-weight: 700;
     color: #ffffff;
     margin: 2px 0 3px 0;
     line-height: 1.25;
 }
 .card-meta {
-    font-size: 0.79rem;
-    color: #cbd5e1;
+    font-size: 0.81rem;
+    color: #e2e8f0;
     margin-bottom: 7px;
 }
 .star-gold {
@@ -1058,9 +1065,9 @@ div[data-testid="stVerticalBlockBorderWrapper"]:hover {
     font-weight: 700;
 }
 .card-desc {
-    font-size: 0.83rem;
-    color: #cbd5e1;
-    line-height: 1.44;
+    font-size: 0.85rem;
+    color: #e2e8f0;
+    line-height: 1.45;
     margin-bottom: 9px;
     min-height: 3.4em;
 }
@@ -1069,7 +1076,7 @@ div[data-testid="stVerticalBlockBorderWrapper"]:hover {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    font-size: 0.77rem;
+    font-size: 0.78rem;
     font-weight: 700;
     color: #6ee7b7;
 }
@@ -1085,25 +1092,25 @@ div[data-testid="stVerticalBlockBorderWrapper"]:hover {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    font-size: 0.76rem;
+    font-size: 0.78rem;
     font-weight: 600;
-    color: #cbd5e1;
+    color: #e2e8f0;
 }
 .live-dot-dim {
     width: 7px;
     height: 7px;
     border-radius: 50%;
-    background: #64748b;
+    background: #94a3b8;
     display: inline-block;
 }
 
 .price-tag {
     display: inline-block;
     background: #172138;
-    border: 1px solid rgba(99, 125, 175, 0.36);
+    border: 1px solid rgba(99, 125, 175, 0.4);
     color: #f8fafc;
     font-family: 'JetBrains Mono', monospace;
-    font-size: 0.77rem;
+    font-size: 0.78rem;
     font-weight: 700;
     padding: 2px 9px;
     border-radius: 6px;
@@ -1114,7 +1121,7 @@ div[data-testid="stVerticalBlockBorderWrapper"]:hover {
     border: 1px solid rgba(52, 211, 153, 0.55);
     color: #a7f3d0;
     font-family: 'JetBrains Mono', monospace;
-    font-size: 0.77rem;
+    font-size: 0.78rem;
     font-weight: 700;
     padding: 2px 9px;
     border-radius: 6px;
@@ -1124,7 +1131,7 @@ div[data-testid="stVerticalBlockBorderWrapper"]:hover {
     background: rgba(244, 63, 94, 0.24);
     border: 1px solid rgba(251, 113, 133, 0.52);
     color: #fecdd3;
-    font-size: 0.74rem;
+    font-size: 0.75rem;
     font-weight: 700;
     padding: 2px 8px;
     border-radius: 5px;
@@ -1132,24 +1139,24 @@ div[data-testid="stVerticalBlockBorderWrapper"]:hover {
 }
 .store-badge {
     display: inline-block;
-    background: rgba(37, 99, 235, 0.22);
+    background: rgba(37, 99, 235, 0.24);
     color: #e0f2fe;
-    border: 1px solid rgba(96, 165, 250, 0.42);
+    border: 1px solid rgba(96, 165, 250, 0.45);
     padding: 3px 10px;
     border-radius: 6px;
-    font-size: 0.77rem;
+    font-size: 0.78rem;
     font-weight: 600;
     margin-right: 5px;
     margin-bottom: 4px;
 }
 .tag-pill {
     display: inline-block;
-    background: rgba(124, 58, 237, 0.22);
+    background: rgba(124, 58, 237, 0.24);
     color: #ede9fe;
-    border: 1px solid rgba(167, 139, 250, 0.40);
+    border: 1px solid rgba(167, 139, 250, 0.42);
     padding: 3px 10px;
     border-radius: 6px;
-    font-size: 0.77rem;
+    font-size: 0.78rem;
     font-weight: 500;
     margin-right: 5px;
     margin-bottom: 4px;
@@ -1162,12 +1169,12 @@ div[data-testid="stVerticalBlockBorderWrapper"]:hover {
 }
 .store-link-btn {
     display: inline-block;
-    background: rgba(30, 41, 66, 0.92);
-    border: 1px solid rgba(99, 125, 175, 0.38);
-    color: #e2e8f0 !important;
+    background: rgba(30, 41, 66, 0.94);
+    border: 1px solid rgba(99, 125, 175, 0.42);
+    color: #f1f5f9 !important;
     text-decoration: none !important;
     font-weight: 600;
-    font-size: 0.76rem;
+    font-size: 0.78rem;
     padding: 3px 10px;
     border-radius: 6px;
     cursor: pointer !important;
@@ -1183,17 +1190,17 @@ div[data-testid="stVerticalBlockBorderWrapper"]:hover {
     transform: translateY(1px) scale(0.97);
 }
 
-/* Luxury Editorial Insights Styling */
+/* Luxury Editorial Insights Styling — Raised Readability & Contrast */
 .insight-hero {
     background: linear-gradient(125deg, #0f172a 0%, #1e1b4b 55%, #0c243c 100%);
-    border: 1px solid rgba(129, 140, 248, 0.32);
+    border: 1px solid rgba(129, 140, 248, 0.36);
     border-radius: 18px;
     padding: 22px 26px;
     margin-bottom: 18px;
     box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
 }
 .insight-hero-kicker {
-    font-size: 0.74rem;
+    font-size: 0.78rem;
     font-weight: 800;
     letter-spacing: 0.1em;
     text-transform: uppercase;
@@ -1202,70 +1209,70 @@ div[data-testid="stVerticalBlockBorderWrapper"]:hover {
 }
 .insight-hero-title {
     font-family: 'Plus Jakarta Sans', sans-serif;
-    font-size: 1.55rem;
+    font-size: 1.58rem;
     font-weight: 800;
     color: #ffffff;
-    margin: 0 0 6px 0;
+    margin: 0 0 7px 0;
 }
 .insight-hero-sub {
-    font-size: 0.88rem;
-    color: #cbd5e1;
+    font-size: 0.93rem;
+    color: #e2e8f0;
     margin: 0;
-    line-height: 1.5;
+    line-height: 1.55;
 }
 
 .kpi-glass-1 {
-    background: linear-gradient(145deg, rgba(37, 99, 235, 0.18) 0%, #0d1425 100%);
-    border: 1px solid rgba(96, 165, 250, 0.38);
+    background: linear-gradient(145deg, rgba(37, 99, 235, 0.20) 0%, #0f172a 100%);
+    border: 1px solid rgba(96, 165, 250, 0.42);
     border-top: 3px solid #3b82f6;
     border-radius: 16px;
     padding: 18px 20px;
     margin-bottom: 16px;
 }
 .kpi-glass-2 {
-    background: linear-gradient(145deg, rgba(139, 92, 246, 0.20) 0%, #0d1425 100%);
-    border: 1px solid rgba(167, 139, 250, 0.38);
+    background: linear-gradient(145deg, rgba(139, 92, 246, 0.22) 0%, #0f172a 100%);
+    border: 1px solid rgba(167, 139, 250, 0.42);
     border-top: 3px solid #8b5cf6;
     border-radius: 16px;
     padding: 18px 20px;
     margin-bottom: 16px;
 }
 .kpi-glass-3 {
-    background: linear-gradient(145deg, rgba(16, 185, 129, 0.18) 0%, #0d1425 100%);
-    border: 1px solid rgba(52, 211, 153, 0.38);
+    background: linear-gradient(145deg, rgba(16, 185, 129, 0.20) 0%, #0f172a 100%);
+    border: 1px solid rgba(52, 211, 153, 0.42);
     border-top: 3px solid #10b981;
     border-radius: 16px;
     padding: 18px 20px;
     margin-bottom: 16px;
 }
 .kpi-label {
-    font-size: 0.74rem;
+    font-size: 0.78rem;
     font-weight: 800;
     text-transform: uppercase;
     letter-spacing: 0.08em;
     color: #93c5fd;
-    margin-bottom: 5px;
+    margin-bottom: 6px;
 }
 .kpi-num {
     font-family: 'Plus Jakarta Sans', sans-serif;
-    font-size: 1.85rem;
+    font-size: 1.88rem;
     font-weight: 800;
     color: #ffffff;
     line-height: 1.15;
-    margin-bottom: 6px;
+    margin-bottom: 7px;
 }
 .kpi-explain {
-    font-size: 0.82rem;
-    color: #cbd5e1;
-    line-height: 1.45;
+    font-size: 0.88rem;
+    color: #e2e8f0;
+    line-height: 1.5;
 }
 
 /* Gem Score Formula Methodology Box */
 .formula-section-box {
-    background: linear-gradient(145deg, #0d1425 0%, #131b33 100%);
-    border: 1px solid rgba(96, 165, 250, 0.32);
+    background: linear-gradient(145deg, #0f172a 0%, #151f3b 100%);
+    border: 1px solid rgba(96, 165, 250, 0.36);
     border-radius: 18px;
-    padding: 20px 24px;
+    padding: 22px 24px;
     margin-bottom: 18px;
 }
 .formula-header-row {
@@ -1274,80 +1281,166 @@ div[data-testid="stVerticalBlockBorderWrapper"]:hover {
     justify-content: space-between;
     align-items: center;
     gap: 10px;
-    margin-bottom: 14px;
+    margin-bottom: 16px;
 }
 .formula-title {
     font-family: 'Plus Jakarta Sans', sans-serif;
-    font-size: 1.18rem;
+    font-size: 1.2rem;
     font-weight: 800;
     color: #ffffff;
     margin: 0;
 }
 .formula-pill {
-    background: rgba(37, 99, 235, 0.22);
-    border: 1px solid rgba(96, 165, 250, 0.45);
-    color: #93c5fd;
+    background: rgba(37, 99, 235, 0.24);
+    border: 1px solid rgba(96, 165, 250, 0.48);
+    color: #bfdbfe;
     font-family: 'JetBrains Mono', monospace;
-    font-size: 0.76rem;
+    font-size: 0.79rem;
     font-weight: 700;
     padding: 5px 12px;
     border-radius: 8px;
 }
 .pillar-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(235px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
     gap: 14px;
 }
 .pillar-card {
-    background: rgba(15, 23, 42, 0.85);
-    border: 1px solid rgba(99, 125, 175, 0.25);
+    background: rgba(15, 23, 42, 0.92);
+    border: 1px solid rgba(99, 125, 175, 0.32);
     border-radius: 12px;
-    padding: 14px 16px;
+    padding: 15px 17px;
 }
 .pillar-badge {
     display: inline-block;
     font-family: 'JetBrains Mono', monospace;
-    font-size: 0.71rem;
+    font-size: 0.75rem;
     font-weight: 700;
     color: #38bdf8;
-    background: rgba(56, 189, 248, 0.14);
-    border: 1px solid rgba(56, 189, 248, 0.32);
-    padding: 2px 8px;
+    background: rgba(56, 189, 248, 0.16);
+    border: 1px solid rgba(56, 189, 248, 0.36);
+    padding: 3px 9px;
     border-radius: 6px;
-    margin-bottom: 7px;
+    margin-bottom: 8px;
 }
 .pillar-name {
     font-family: 'Plus Jakarta Sans', sans-serif;
-    font-size: 0.94rem;
-    font-weight: 700;
-    color: #ffffff;
-    margin-bottom: 5px;
-}
-.pillar-desc {
-    font-size: 0.8rem;
-    color: #cbd5e1;
-    line-height: 1.45;
-}
-
-.takeaway-card {
-    background: #0d1425;
-    border: 1px solid rgba(99, 125, 175, 0.26);
-    border-radius: 14px;
-    padding: 16px 18px;
-    height: 100%;
-    margin-top: 8px;
-}
-.takeaway-title {
-    font-family: 'Plus Jakarta Sans', sans-serif;
-    font-size: 0.98rem;
+    font-size: 1.0rem;
     font-weight: 700;
     color: #ffffff;
     margin-bottom: 6px;
 }
+.pillar-desc {
+    font-size: 0.88rem;
+    color: #e2e8f0;
+    line-height: 1.52;
+}
+
+/* Prominent Bottom Takeaway Cards with Icons & Bold Lead Stats */
+.takeaway-card {
+    background: linear-gradient(155deg, #10192e 0%, #15203b 100%);
+    border: 1px solid rgba(96, 165, 250, 0.34);
+    border-top: 3px solid #38bdf8;
+    border-radius: 16px;
+    padding: 18px 20px;
+    height: 100%;
+    margin-top: 8px;
+    box-shadow: 0 10px 26px rgba(0, 0, 0, 0.32);
+}
+.takeaway-card-purple {
+    border-top-color: #a78bfa;
+}
+.takeaway-card-green {
+    border-top-color: #34d399;
+}
+.takeaway-top-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-size: 1.24rem;
+    font-weight: 800;
+    color: #ffffff;
+    background: rgba(56, 189, 248, 0.14);
+    border: 1px solid rgba(56, 189, 248, 0.34);
+    padding: 5px 12px;
+    border-radius: 10px;
+    margin-bottom: 10px;
+}
+.takeaway-top-badge-purple {
+    background: rgba(167, 139, 250, 0.15);
+    border-color: rgba(167, 139, 250, 0.36);
+}
+.takeaway-top-badge-green {
+    background: rgba(52, 211, 153, 0.15);
+    border-color: rgba(52, 211, 153, 0.36);
+}
+.takeaway-title {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-size: 1.04rem;
+    font-weight: 700;
+    color: #ffffff;
+    margin-bottom: 7px;
+}
 .takeaway-body {
-    font-size: 0.82rem;
+    font-size: 0.89rem;
+    color: #e2e8f0;
+    line-height: 1.55;
+}
+.methodology-footnote {
+    margin-top: 14px;
+    padding: 10px 14px;
+    background: rgba(15, 23, 42, 0.78);
+    border: 1px solid rgba(99, 125, 175, 0.24);
+    border-radius: 10px;
+    font-size: 0.83rem;
     color: #cbd5e1;
     line-height: 1.5;
+}
+
+/* Data Export Section */
+.export-section-box {
+    background: linear-gradient(135deg, #0f172a 0%, #16203a 100%);
+    border: 1px solid rgba(96, 165, 250, 0.36);
+    border-radius: 18px;
+    padding: 22px 24px;
+    margin-top: 22px;
+    margin-bottom: 10px;
+}
+.export-title {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-size: 1.18rem;
+    font-weight: 800;
+    color: #ffffff;
+    margin: 0 0 5px 0;
+}
+.export-sub {
+    font-size: 0.89rem;
+    color: #e2e8f0;
+    margin: 0 0 14px 0;
+    line-height: 1.5;
+}
+.export-card-meta {
+    font-size: 0.83rem;
+    color: #cbd5e1;
+    margin-bottom: 8px;
+    line-height: 1.45;
+}
+
+.app-footer-bar {
+    margin-top: 24px;
+    padding-top: 16px;
+    border-top: 1px solid rgba(99, 125, 175, 0.28);
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.88rem;
+    color: #cbd5e1;
+}
+.app-footer-bar strong {
+    color: #f8fafc;
 }
 
 .review-quote {
@@ -1357,7 +1450,7 @@ div[data-testid="stVerticalBlockBorderWrapper"]:hover {
     border-radius: 11px;
     padding: 11px 14px;
     margin-bottom: 9px;
-    font-size: 0.84rem;
+    font-size: 0.86rem;
     color: #f1f5f9;
     line-height: 1.5;
 }
@@ -1368,7 +1461,7 @@ div[data-testid="stVerticalBlockBorderWrapper"]:hover {
     border-radius: 11px;
     padding: 11px 14px;
     margin-bottom: 9px;
-    font-size: 0.84rem;
+    font-size: 0.86rem;
     color: #f1f5f9;
     line-height: 1.5;
 }
@@ -1591,7 +1684,6 @@ def load_and_score_catalog(live_top_ids_tuple: tuple) -> pd.DataFrame:
         "|".join(detect_verified_stores(nm, int(aid), str(p), str(d)))
         for nm, aid, p, d in zip(scored_df["name"], scored_df["appid"], pub_s, dev_s)
     ]
-    # Pre-compute fast lookup columns once so sorting & filtering run in milliseconds
     scored_df["_strict_non_aaa"] = (
         (~scored_df["is_aaa_blockbuster"])
         & (scored_df["total_reviews"] < 35000)
@@ -1699,6 +1791,66 @@ def get_filtered_sorted_catalog(
     return out.sort_values(rank_col, ascending=False)
 
 
+@st.cache_data(ttl=3600, show_spinner=False)
+def build_export_datasets(df: pd.DataFrame) -> dict[str, tuple[pd.DataFrame, bytes]]:
+    export_cols = [
+        c
+        for c in [
+            "appid",
+            "name",
+            "release_date",
+            "release_year",
+            "developers",
+            "publishers",
+            "genres",
+            "tags",
+            "verified_stores",
+            "price_usd",
+            "discount_pct",
+            "effective_price_usd",
+            "is_free",
+            "total_reviews",
+            "wilson_score",
+            "hidden_gem_index",
+            "aaa_shadow_score",
+            "is_aaa_blockbuster",
+            "shadow_story",
+        ]
+        if c in df.columns
+    ]
+    clean_full = df[~df["is_demo_teaser"]][export_cols].sort_values(
+        "hidden_gem_index", ascending=False
+    ).reset_index(drop=True)
+
+    clean_gems = clean_full[
+        (df.loc[clean_full.index, "_strict_non_aaa"]) & (clean_full["wilson_score"] >= 75.0)
+    ].reset_index(drop=True)
+
+    # Chart summary table
+    price_sub = clean_full[clean_full["total_reviews"] >= 100].copy()
+    price_sub["price_tier"] = pd.cut(
+        price_sub["effective_price_usd"],
+        bins=[-1, 0.01, 10.0, 20.0, 35.0, 500.0],
+        labels=["Free to Play ($0)", "Under $10", "$10 – $20", "$20 – $35", "$35+ (Premium / AAA)"],
+    ).astype(str)
+    summary_df = (
+        price_sub.groupby("price_tier", observed=False)
+        .agg(
+            game_count=("appid", "count"),
+            avg_wilson_approval_pct=("wilson_score", lambda s: round(float(s.mean()), 2)),
+            avg_hidden_gem_score=("hidden_gem_index", lambda s: round(float(s.mean()), 2)),
+            median_reviews=("total_reviews", lambda s: int(s.median())),
+        )
+        .reset_index()
+    )
+
+    return {
+        "gems": (clean_gems, clean_gems.to_csv(index=False).encode("utf-8")),
+        "full": (clean_full, clean_full.to_csv(index=False).encode("utf-8")),
+        "summary": (summary_df, summary_df.to_csv(index=False).encode("utf-8")),
+    }
+
+
 pulse = get_live_steam_pulse()
 df_all = load_and_score_catalog(tuple(pulse.get("top_played_ids", [])))
 
@@ -1796,7 +1948,6 @@ def render_featured_spotlight_fragment() -> None:
         bool(st.session_state["hide_aaa"]),
         int(st.session_state["spotlight_seed"]),
     )
-    # Batch-fetch live player counts for all 10 spotlight titles in one parallel pass
     spot_ccu_map = get_live_ccu_batch(tuple(int(a) for a in spotlight_pool["appid"].tolist()))
 
     s_idx = int(st.session_state["spotlight_idx"]) % len(spotlight_pool)
@@ -2163,7 +2314,7 @@ def render_catalog_browser_fragment(min_year: int, max_year: int) -> None:
             st.rerun()
     with pg2:
         st.markdown(
-            f"<div style='text-align:center; padding-top:10px; font-size:0.86rem; color:#cbd5e1;'>"
+            f"<div style='text-align:center; padding-top:10px; font-size:0.88rem; color:#e2e8f0;'>"
             f"Page <strong>{curr_page + 1}</strong> of <strong>{total_pages:,}</strong> ({total_matching:,} total games)</div>",
             unsafe_allow_html=True,
         )
@@ -2239,16 +2390,17 @@ with page_slot.container():
         render_catalog_browser_fragment(min_year, max_year)
 
     # =======================================================================
-    # PAGE 2: INSIGHTS & CHARTS (GEM SCORE METHODOLOGY + SCATTER + DONUT + BAR)
+    # PAGE 2: INSIGHTS & CHARTS (DATA-SYNCED CHARTS + TAKEAWAYS + DOWNLOADS)
     # =======================================================================
     else:
+        total_catalog_n = int((~df_all["is_demo_teaser"]).sum())
         st.markdown(
-            """
+            f"""
 <div class="insight-hero">
 <div class="insight-hero-kicker">PC MARKET OBSERVATORY • DATA INSIGHTS</div>
 <div class="insight-hero-title">Why Great PC Games Go Unnoticed — And Where to Find Them</div>
 <p class="insight-hero-sub">
-Analyzing 25,000+ PC releases reveals a clear pattern: thousands of player-loved indie and AA titles launch in the shadow of $70 mega-blockbusters, delivering higher player satisfaction at a fraction of the price.
+Analyzing <strong>{total_catalog_n:,} PC releases</strong> reveals a clear pattern: thousands of player-loved indie and AA titles launch in the shadow of $35+ premium &amp; AAA blockbusters, earning higher average buyer approval at lower prices.
 </p>
 </div>
 """,
@@ -2258,8 +2410,9 @@ Analyzing 25,000+ PC releases reveals a clear pattern: thousands of player-loved
         gems_pool = apply_strict_non_aaa_filter(
             df_all[(~df_all["is_demo_teaser"]) & (df_all["wilson_score"] >= 75)]
         ).copy()
-        eclipsed_count = int((gems_pool["aaa_shadow_score"] >= 35.0).sum())
-        avg_rating = float(gems_pool["wilson_score"].mean()) if not gems_pool.empty else 86.0
+        eclipsed_gems = gems_pool[gems_pool["aaa_shadow_score"] >= 35.0]
+        eclipsed_count = len(eclipsed_gems)
+        avg_gems_rating = float(gems_pool["wilson_score"].mean()) if not gems_pool.empty else 86.0
 
         k1, k2, k3 = st.columns(3, gap="medium")
         with k1:
@@ -2268,7 +2421,7 @@ Analyzing 25,000+ PC releases reveals a clear pattern: thousands of player-loved
 <div class="kpi-glass-1">
 <div class="kpi-label">Verified Hidden Gems</div>
 <div class="kpi-num">{len(gems_pool):,} Games</div>
-<div class="kpi-explain">Indie &amp; AA titles rated 75%+ positive by real buyers, yet still flying under the mainstream radar.</div>
+<div class="kpi-explain">Non-AAA indie &amp; AA releases rated 75%+ positive by buyers, with fewer than 35,000 total reviews.</div>
 </div>
 """,
                 unsafe_allow_html=True,
@@ -2277,9 +2430,9 @@ Analyzing 25,000+ PC releases reveals a clear pattern: thousands of player-loved
             st.markdown(
                 f"""
 <div class="kpi-glass-2">
-<div class="kpi-label">Buried by AAA Launches</div>
+<div class="kpi-label">AAA-Eclipsed Gems (±14 Days)</div>
 <div class="kpi-num">{eclipsed_count:,} Games</div>
-<div class="kpi-explain">Released within ±14 days of a mega-blockbuster and starved of front-page storefront visibility.</div>
+<div class="kpi-explain">Hidden gems released within ±14 days of a major franchise launch that dominated storefront visibility.</div>
 </div>
 """,
                 unsafe_allow_html=True,
@@ -2288,14 +2441,17 @@ Analyzing 25,000+ PC releases reveals a clear pattern: thousands of player-loved
             st.markdown(
                 f"""
 <div class="kpi-glass-3">
-<div class="kpi-label">Average Player Satisfaction</div>
-<div class="kpi-num">{avg_rating:.1f}% Positive</div>
-<div class="kpi-explain">Consistent buyer happiness across smaller studios — regularly outscoring $60–$70 AAA launches.</div>
+<div class="kpi-label">Avg. Approval (75%+ Gems Cohort)</div>
+<div class="kpi-num">{avg_gems_rating:.1f}% Positive</div>
+<div class="kpi-explain">Mean buyer approval inside the 75%+ Hidden Gems cohort (vs. 73–78% across all PC games in Chart 3).</div>
 </div>
 """,
                 unsafe_allow_html=True,
             )
 
+        # -------------------------------------------------------------------
+        # HOW THE GEM SCORE IS CALCULATED (METHODOLOGY & FORMULA BREAKDOWN)
+        # -------------------------------------------------------------------
         st.markdown(
             """
 <div class="formula-section-box">
@@ -2330,136 +2486,147 @@ Analyzing 25,000+ PC releases reveals a clear pattern: thousands of player-loved
             unsafe_allow_html=True,
         )
 
-        c_left, c_right = st.columns([1.3, 1.0], gap="large")
+        # -------------------------------------------------------------------
+        # ROW 1: MATCHED-HEIGHT SCATTER PLOT + LEADER-LINE DONUT CHART
+        # -------------------------------------------------------------------
+        c_left, c_right = st.columns([1.22, 1.0], gap="large")
 
         with c_left:
-            base_scatter = df_all[(~df_all["is_demo_teaser"]) & (df_all["total_reviews"] >= 150)].copy()
-            aaa_sample = base_scatter[
-                (base_scatter["is_aaa_blockbuster"]) | (base_scatter["total_reviews"] >= 35000)
-            ].nlargest(90, "total_reviews")
-            eclipsed_sample = gems_pool[gems_pool["aaa_shadow_score"] >= 40.0].nlargest(140, "hidden_gem_index")
-            indie_sample = gems_pool[gems_pool["aaa_shadow_score"] < 40.0].nlargest(120, "wilson_score")
+            with st.container(border=True):
+                base_scatter = df_all[(~df_all["is_demo_teaser"]) & (df_all["total_reviews"] >= 150)].copy()
+                aaa_sample = base_scatter[
+                    (base_scatter["is_aaa_blockbuster"]) | (base_scatter["total_reviews"] >= 35000)
+                ].nlargest(55, "total_reviews")
+                eclipsed_sample = gems_pool[gems_pool["aaa_shadow_score"] >= 40.0].nlargest(65, "hidden_gem_index")
+                indie_sample = gems_pool[gems_pool["aaa_shadow_score"] < 40.0].nlargest(60, "wilson_score")
 
-            scatter_df = pd.concat([aaa_sample, eclipsed_sample, indie_sample], ignore_index=True).drop_duplicates("appid")
+                scatter_df = pd.concat([aaa_sample, eclipsed_sample, indie_sample], ignore_index=True).drop_duplicates("appid")
 
-            def _classify_market_tier(r: pd.Series) -> str:
-                if bool(r.get("is_aaa_blockbuster", False)) or int(r.get("total_reviews", 0)) >= 35000:
-                    return "AAA Blockbuster / Mega-Hit"
-                if float(r.get("aaa_shadow_score", 0)) >= 40.0:
-                    return "AAA-Eclipsed Hidden Gem"
-                return "Indie / AA Standout"
+                def _classify_market_tier(r: pd.Series) -> str:
+                    if bool(r.get("is_aaa_blockbuster", False)) or int(r.get("total_reviews", 0)) >= 35000:
+                        return "AAA / Mega-Hit"
+                    if float(r.get("aaa_shadow_score", 0)) >= 40.0:
+                        return "AAA-Eclipsed Gem"
+                    return "Indie / AA Standout"
 
-            scatter_df["Market Segment"] = scatter_df.apply(_classify_market_tier, axis=1)
+                scatter_df["Market Segment"] = scatter_df.apply(_classify_market_tier, axis=1)
 
-            fig_scatter = px.scatter(
-                scatter_df,
-                x="total_reviews",
-                y="wilson_score",
-                size="hidden_gem_index",
-                color="Market Segment",
-                hover_name="name",
-                hover_data={
-                    "Market Segment": True,
-                    "total_reviews": ":,",
-                    "wilson_score": ":.1f",
-                    "hidden_gem_index": ":.1f",
-                    "effective_price_usd": ":.2f",
-                },
-                color_discrete_map={
-                    "AAA-Eclipsed Hidden Gem": "#38bdf8",
-                    "Indie / AA Standout": "#10b981",
-                    "AAA Blockbuster / Mega-Hit": "#f43f5e",
-                },
-                log_x=True,
-                size_max=16,
-                title="1. Popularity vs. Player Satisfaction (Hover Any Bubble to Inspect)",
-                labels={
-                    "total_reviews": "Total Review Volume (Log Scale)",
-                    "wilson_score": "Buyer Approval (%)",
-                    "hidden_gem_index": "Gem Score",
-                    "effective_price_usd": "Price ($)",
-                },
-                height=430,
-            )
-            fig_scatter.update_traces(marker=dict(opacity=0.82, line=dict(width=0.8, color="#0f172a")))
-            fig_scatter.update_layout(
-                paper_bgcolor="#0d1425",
-                plot_bgcolor="#0d1425",
-                font=dict(color="#e2e8f0", size=12, family="Inter"),
-                title_font=dict(size=15, color="#ffffff", family="Plus Jakarta Sans"),
-                xaxis=dict(showgrid=True, gridcolor="rgba(148,163,184,0.12)", zeroline=False),
-                yaxis=dict(range=[58, 101], showgrid=True, gridcolor="rgba(148,163,184,0.12)", zeroline=False),
-                legend=dict(
-                    orientation="h",
-                    yanchor="bottom",
-                    y=1.01,
-                    xanchor="left",
-                    x=0,
-                    title=None,
-                    font=dict(size=11),
-                ),
-                margin=dict(l=14, r=18, t=72, b=36),
-            )
-            st.plotly_chart(fig_scatter, use_container_width=True)
+                fig_scatter = px.scatter(
+                    scatter_df,
+                    x="total_reviews",
+                    y="wilson_score",
+                    size="hidden_gem_index",
+                    color="Market Segment",
+                    hover_name="name",
+                    hover_data={
+                        "Market Segment": True,
+                        "total_reviews": ":,",
+                        "wilson_score": ":.1f",
+                        "hidden_gem_index": ":.1f",
+                        "effective_price_usd": ":.2f",
+                    },
+                    color_discrete_map={
+                        "AAA-Eclipsed Gem": "#38bdf8",
+                        "Indie / AA Standout": "#10b981",
+                        "AAA / Mega-Hit": "#f43f5e",
+                    },
+                    log_x=True,
+                    size_max=11,
+                    title="1. Popularity vs. Approval (68%–100% Zoom • Hover Dots)",
+                    labels={
+                        "total_reviews": "Total Review Volume (Log Scale)",
+                        "wilson_score": "Buyer Approval (%)",
+                        "hidden_gem_index": "Gem Score",
+                        "effective_price_usd": "Price ($)",
+                    },
+                    height=450,
+                )
+                fig_scatter.update_traces(
+                    marker=dict(opacity=0.68, line=dict(width=0.7, color="rgba(15, 23, 42, 0.85)"))
+                )
+                fig_scatter.update_layout(
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    plot_bgcolor="#0b1120",
+                    font=dict(color="#e2e8f0", size=12, family="Inter"),
+                    title_font=dict(size=15, color="#ffffff", family="Plus Jakarta Sans"),
+                    xaxis=dict(showgrid=True, gridcolor="rgba(148,163,184,0.14)", zeroline=False),
+                    yaxis=dict(range=[68, 100.8], showgrid=True, gridcolor="rgba(148,163,184,0.14)", zeroline=False),
+                    legend=dict(
+                        orientation="h",
+                        yanchor="bottom",
+                        y=1.01,
+                        xanchor="left",
+                        x=0,
+                        title=None,
+                        font=dict(size=11.5),
+                    ),
+                    margin=dict(l=12, r=14, t=72, b=34),
+                )
+                st.plotly_chart(fig_scatter, use_container_width=True)
 
         with c_right:
-            high_rated = gems_pool[gems_pool["wilson_score"] >= 82.0].copy()
-            high_rated["Primary Genre"] = high_rated["genres"].apply(
-                lambda g: next((x.strip() for x in str(g).split("|") if x.strip() and x.strip() != "Indie"), "Indie")
-            )
-            genre_counts = (
-                high_rated.groupby("Primary Genre")
-                .size()
-                .reset_index(name="gem_count")
-                .sort_values("gem_count", ascending=False)
-            )
-            top_genres = genre_counts.head(6).copy()
-            other_sum = int(genre_counts.iloc[6:]["gem_count"].sum())
-            if other_sum > 0:
-                top_genres = pd.concat(
-                    [top_genres, pd.DataFrame([{"Primary Genre": "Other Genres", "gem_count": other_sum}])],
-                    ignore_index=True,
+            with st.container(border=True):
+                high_rated = gems_pool[gems_pool["wilson_score"] >= 82.0].copy()
+                high_rated["Primary Genre"] = high_rated["genres"].apply(
+                    lambda g: next((x.strip() for x in str(g).split("|") if x.strip() and x.strip() != "Indie"), "Indie")
                 )
+                genre_counts = (
+                    high_rated.groupby("Primary Genre")
+                    .size()
+                    .reset_index(name="gem_count")
+                    .sort_values("gem_count", ascending=False)
+                )
+                top_genres = genre_counts.head(6).copy()
+                other_sum = int(genre_counts.iloc[6:]["gem_count"].sum())
+                if other_sum > 0:
+                    top_genres = pd.concat(
+                        [top_genres, pd.DataFrame([{"Primary Genre": "Other Genres", "gem_count": other_sum}])],
+                        ignore_index=True,
+                    )
 
-            fig_donut = px.pie(
-                top_genres,
-                values="gem_count",
-                names="Primary Genre",
-                hole=0.54,
-                color_discrete_sequence=["#3b82f6", "#8b5cf6", "#10b981", "#06b6d4", "#f59e0b", "#ec4899", "#64748b"],
-                title="2. Genre Share of Top-Rated Gems (82%+)",
-                height=430,
-            )
-            fig_donut.update_traces(
-                textinfo="percent",
-                textfont=dict(size=12, color="#ffffff", family="Inter"),
-                marker=dict(line=dict(color="#0d1425", width=2)),
-                hovertemplate="<b>%{label}</b><br>Top-Rated Gems: %{value:,} (%{percent})<extra></extra>",
-            )
-            fig_donut.update_layout(
-                paper_bgcolor="#0d1425",
-                plot_bgcolor="#0d1425",
-                font=dict(color="#e2e8f0", size=12, family="Inter"),
-                title_font=dict(size=15, color="#ffffff", family="Plus Jakarta Sans"),
-                legend=dict(
-                    orientation="v",
-                    yanchor="middle",
-                    y=0.5,
-                    xanchor="left",
-                    x=1.02,
-                    font=dict(size=11.5),
-                ),
-                margin=dict(l=12, r=12, t=60, b=28),
-            )
-            st.plotly_chart(fig_donut, use_container_width=True)
+                fig_donut = px.pie(
+                    top_genres,
+                    values="gem_count",
+                    names="Primary Genre",
+                    hole=0.52,
+                    color_discrete_sequence=["#3b82f6", "#8b5cf6", "#10b981", "#06b6d4", "#f59e0b", "#ec4899", "#64748b"],
+                    title="2. Genre Share of Top-Rated Gems (82%+ Approval)",
+                    height=450,
+                )
+                fig_donut.update_traces(
+                    textposition="outside",
+                    texttemplate="%{label}<br>%{percent:.1%}",
+                    textfont=dict(size=11.5, color="#f1f5f9", family="Inter"),
+                    pull=[0.02] * len(top_genres),
+                    marker=dict(line=dict(color="#0b1120", width=2)),
+                    hovertemplate="<b>%{label}</b><br>Top-Rated Gems: %{value:,} (%{percent:.1%})<extra></extra>",
+                )
+                fig_donut.update_layout(
+                    showlegend=False,
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    plot_bgcolor="rgba(0,0,0,0)",
+                    font=dict(color="#e2e8f0", size=12, family="Inter"),
+                    title_font=dict(size=15, color="#ffffff", family="Plus Jakarta Sans"),
+                    margin=dict(l=28, r=28, t=72, b=34),
+                )
+                st.plotly_chart(fig_donut, use_container_width=True)
 
+        # -------------------------------------------------------------------
+        # ROW 2: HONEST 0–100% BAR CHART (ALL PC GAMES WITH 100+ REVIEWS)
+        # -------------------------------------------------------------------
         price_df = df_all[(~df_all["is_demo_teaser"]) & (df_all["total_reviews"] >= 100)].copy()
+        tier_order = [
+            "Free to Play ($0)",
+            "Under $10",
+            "$10 – $20",
+            "$20 – $35",
+            "$35+ (Premium / AAA)",
+        ]
         price_df["Price Tier"] = pd.cut(
             price_df["effective_price_usd"],
             bins=[-1, 0.01, 10.0, 20.0, 35.0, 500.0],
-            labels=["Free to Play ($0)", "Under $10", "$10 – $20", "$20 – $35", "$35+ (AAA Tier)"],
+            labels=tier_order,
         ).astype(str)
-        tier_order = ["Free to Play ($0)", "Under $10", "$10 – $20", "$20 – $35", "$35+ (AAA Tier)"]
         p_agg = (
             price_df.groupby("Price Tier", observed=False)
             .agg(games=("appid", "count"), avg_rating=("wilson_score", "mean"))
@@ -2468,65 +2635,199 @@ Analyzing 25,000+ PC releases reveals a clear pattern: thousands of player-loved
         p_agg["Price Tier"] = pd.Categorical(p_agg["Price Tier"], categories=tier_order, ordered=True)
         p_agg = p_agg.sort_values("Price Tier")
 
-        fig_price = px.bar(
-            p_agg,
-            x="Price Tier",
-            y="avg_rating",
-            color="avg_rating",
-            color_continuous_scale=["#6366f1", "#38bdf8", "#10b981"],
-            text=p_agg.apply(lambda r: f"★ {r['avg_rating']:.1f}%  ({int(r['games']):,} games)", axis=1),
-            title="3. Price vs. Player Approval — Mid-Priced Indie & AA Games Outscore $35+ Releases",
-            labels={"Price Tier": "", "avg_rating": "Average Player Approval (%)"},
-            height=330,
-        )
-        fig_price.update_traces(
-            textposition="outside",
-            marker_line_width=0,
-            hovertemplate="<b>%{x}</b><br>Avg Buyer Rating: %{y:.1f}%<extra></extra>",
-        )
-        fig_price.update_layout(
-            coloraxis_showscale=False,
-            yaxis=dict(range=[65, 92], showgrid=True, gridcolor="rgba(148,163,184,0.12)", zeroline=False),
-            xaxis=dict(showgrid=False),
-            paper_bgcolor="#0d1425",
-            plot_bgcolor="#0d1425",
-            font=dict(color="#e2e8f0", size=12, family="Inter"),
-            title_font=dict(size=15, color="#ffffff", family="Plus Jakarta Sans"),
-            margin=dict(l=16, r=16, t=54, b=32),
-        )
-        st.plotly_chart(fig_price, use_container_width=True)
+        with st.container(border=True):
+            fig_price = px.bar(
+                p_agg,
+                x="Price Tier",
+                y="avg_rating",
+                color="avg_rating",
+                color_continuous_scale=["#6366f1", "#38bdf8", "#10b981"],
+                text=p_agg.apply(lambda r: f"★ {r['avg_rating']:.1f}% ({int(r['games']):,})", axis=1),
+                title=f"3. Average Buyer Approval by Price Tier (All {len(price_df):,} PC Games with 100+ Reviews • Full 0–100% Scale)",
+                labels={"Price Tier": "", "avg_rating": "Average Buyer Approval (%)"},
+                height=350,
+            )
+            fig_price.update_traces(
+                textposition="outside",
+                textfont=dict(size=12, color="#f1f5f9"),
+                marker_line_width=0,
+                hovertemplate="<b>%{x}</b><br>Avg Buyer Approval: %{y:.1f}%<extra></extra>",
+            )
+            fig_price.update_layout(
+                coloraxis_showscale=False,
+                yaxis=dict(range=[0, 100], showgrid=True, gridcolor="rgba(148,163,184,0.14)", zeroline=False),
+                xaxis=dict(showgrid=False, tickfont=dict(size=12.5, color="#f1f5f9")),
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="#0b1120",
+                font=dict(color="#e2e8f0", size=12, family="Inter"),
+                title_font=dict(size=15, color="#ffffff", family="Plus Jakarta Sans"),
+                margin=dict(l=16, r=16, t=56, b=28),
+            )
+            st.plotly_chart(fig_price, use_container_width=True)
+
+        # -------------------------------------------------------------------
+        # DATA-SYNCED KEY TAKEAWAY CARDS (100% CONSISTENT WITH CHARTS)
+        # -------------------------------------------------------------------
+        aaa_hits_df = df_all[
+            (~df_all["is_demo_teaser"])
+            & ((df_all["is_aaa_blockbuster"]) | (df_all["total_reviews"] >= 35000))
+        ]
+        med_eclipsed_revs = int(eclipsed_gems["total_reviews"].median()) if not eclipsed_gems.empty else 450
+        med_aaa_revs = int(aaa_hits_df["total_reviews"].median()) if not aaa_hits_df.empty else 55000
+        eclipsed_avg_sat = float(eclipsed_gems["wilson_score"].mean()) if not eclipsed_gems.empty else avg_gems_rating
+
+        tier_rating_map = dict(zip(p_agg["Price Tier"].astype(str), p_agg["avg_rating"]))
+        r_10_20 = float(tier_rating_map.get("$10 – $20", 78.0))
+        r_35_plus = float(tier_rating_map.get("$35+ (Premium / AAA)", 73.0))
+        tier_gap = r_10_20 - r_35_plus
+
+        non_other_genres = top_genres[top_genres["Primary Genre"] != "Other Genres"].reset_index(drop=True)
+        total_82_gems = max(1, int(genre_counts["gem_count"].sum()))
+        g_top3_list = []
+        for idx_g in range(min(3, len(non_other_genres))):
+            g_nm = str(non_other_genres.loc[idx_g, "Primary Genre"])
+            g_cnt = int(non_other_genres.loc[idx_g, "gem_count"])
+            g_pct = (g_cnt / total_82_gems) * 100.0
+            g_top3_list.append((g_nm, g_cnt, g_pct))
+
+        if len(g_top3_list) >= 3:
+            g1, g2, g3 = g_top3_list[0], g_top3_list[1], g_top3_list[2]
+            top3_combined_pct = g1[2] + g2[2] + g3[2]
+            genre_headline = f"3. {g1[0]}, {g2[0]} & {g3[0]} Lead"
+            genre_body = (
+                f"Among <strong>{total_82_gems:,} top-rated gems</strong> (82%+ approval), "
+                f"<strong>{g1[0]} ({g1[2]:.1f}%)</strong>, <strong>{g2[0]} ({g2[2]:.1f}%)</strong>, and "
+                f"<strong>{g3[0]} ({g3[2]:.1f}%)</strong> account for the top three genre shares in Chart 2."
+            )
+        else:
+            top3_combined_pct = 50.0
+            genre_headline = "3. Top Performing Gem Genres"
+            genre_body = f"Chart 2 breaks down all <strong>{total_82_gems:,} top-rated gems</strong> (82%+ approval) by primary genre."
 
         tk1, tk2, tk3 = st.columns(3, gap="medium")
         with tk1:
             st.markdown(
-                """
+                f"""
 <div class="takeaway-card">
-<div class="takeaway-title">1. Launch Timing Beats Marketing</div>
-<div class="takeaway-body">Games releasing within two weeks of a major franchise lose up to 80% of storefront visibility despite earning 90%+ positive buyer reviews.</div>
+<div class="takeaway-top-badge">eclipse • {eclipsed_count:,} Gems</div>
+<div class="takeaway-title">1. Launch Timing Masks Quality</div>
+<div class="takeaway-body">
+<strong>{eclipsed_count:,} gems</strong> launched within ±14 days of a major franchise release—averaging <strong>{eclipsed_avg_sat:.1f}% positive reviews</strong> while earning a median of <strong>{med_eclipsed_revs:,} reviews</strong> vs. <strong>{med_aaa_revs:,}</strong> for AAA/mega-hits.
+</div>
 </div>
 """,
                 unsafe_allow_html=True,
             )
         with tk2:
             st.markdown(
-                """
-<div class="takeaway-card">
+                f"""
+<div class="takeaway-card takeaway-card-purple">
+<div class="takeaway-top-badge takeaway-top-badge-purple">★ {r_10_20:.1f}% vs. {r_35_plus:.1f}%</div>
 <div class="takeaway-title">2. The $10–$20 Sweet Spot</div>
-<div class="takeaway-body">Focused indie and AA titles priced between $10 and $20 consistently achieve higher player approval than $60–$70 blockbuster releases.</div>
+<div class="takeaway-body">
+Across all <strong>{len(price_df):,} PC games</strong> with 100+ reviews in Chart 3, <strong>$10–$20</strong> releases average <strong>{r_10_20:.1f}%</strong> buyer approval—outscoring <strong>$35+ (Premium / AAA)</strong> titles (<strong>{r_35_plus:.1f}%</strong>) by <strong>{tier_gap:+.1f} percentage points</strong>.
+</div>
 </div>
 """,
                 unsafe_allow_html=True,
             )
         with tk3:
             st.markdown(
-                """
-<div class="takeaway-card">
-<div class="takeaway-title">3. Action, Adventure &amp; Sim Lead</div>
-<div class="takeaway-body">Action, Adventure, and Simulation hold the highest concentration of 82%+ rated gems across Steam, Epic, and GOG.</div>
+                f"""
+<div class="takeaway-card takeaway-card-green">
+<div class="takeaway-top-badge takeaway-top-badge-green">📊 {top3_combined_pct:.1f}% Share</div>
+<div class="takeaway-title">{genre_headline}</div>
+<div class="takeaway-body">{genre_body}</div>
 </div>
 """,
                 unsafe_allow_html=True,
             )
 
-st.divider()
-st.caption("Under the Radar • Powered by Valve Steam Web API, Epic Games Store API & CheapShark Cross-Store Deals.")
+        st.markdown(
+            f"""
+<div class="methodology-footnote">
+<strong>Methodology &amp; Cohort Note:</strong> All metrics above are computed directly from the active catalog of <strong>{total_catalog_n:,} PC titles</strong> (excluding demos/teasers). KPI cards &amp; Chart 2 measure the <strong>{len(gems_pool):,} Verified Hidden Gems</strong> cohort (non-AAA titles with &lt;35,000 reviews and ≥75% Wilson approval), while Chart 3 evaluates all <strong>{len(price_df):,} PC titles</strong> with ≥100 reviews across every price tier.
+</div>
+""",
+            unsafe_allow_html=True,
+        )
+
+        # -------------------------------------------------------------------
+        # DOWNLOAD RESEARCH DATASETS SECTION
+        # -------------------------------------------------------------------
+        exports = build_export_datasets(df_all)
+        gems_export_df, gems_csv = exports["gems"]
+        full_export_df, full_csv = exports["full"]
+        summary_export_df, summary_csv = exports["summary"]
+
+        st.markdown(
+            """
+<div class="export-section-box">
+<div class="export-title">📥 Download Scored Datasets (CSV)</div>
+<p class="export-sub">
+Export the underlying PC catalog, pre-filtered Verified Hidden Gems, or Chart 3 price-tier summary tables for your own spreadsheets, notebooks, or research.
+</p>
+</div>
+""",
+            unsafe_allow_html=True,
+        )
+
+        dl1, dl2, dl3 = st.columns(3, gap="medium")
+        with dl1:
+            with st.container(border=True):
+                st.markdown("**1. Verified Hidden Gems**")
+                st.markdown(
+                    f'<div class="export-card-meta"><strong>{len(gems_export_df):,} rows</strong> • {len(gems_export_df.columns)} columns<br>Non-AAA titles with ≥75% Wilson approval, sorted by Hidden Gem Score.</div>',
+                    unsafe_allow_html=True,
+                )
+                st.download_button(
+                    "Download Hidden Gems (.csv)",
+                    data=gems_csv,
+                    file_name="under_the_radar_hidden_gems.csv",
+                    mime="text/csv",
+                    type="primary",
+                    use_container_width=True,
+                )
+
+        with dl2:
+            with st.container(border=True):
+                st.markdown("**2. Full Scored PC Catalog**")
+                st.markdown(
+                    f'<div class="export-card-meta"><strong>{len(full_export_df):,} rows</strong> • {len(full_export_df.columns)} columns<br>Complete PC catalog with Wilson Score, Gem Score, AAA Shadow Score &amp; stores.</div>',
+                    unsafe_allow_html=True,
+                )
+                st.download_button(
+                    "Download Full Catalog (.csv)",
+                    data=full_csv,
+                    file_name="under_the_radar_full_catalog.csv",
+                    mime="text/csv",
+                    use_container_width=True,
+                )
+
+        with dl3:
+            with st.container(border=True):
+                st.markdown("**3. Price-Tier Chart Summary**")
+                st.markdown(
+                    f'<div class="export-card-meta"><strong>{len(summary_export_df)} tiers</strong> • {len(summary_export_df.columns)} columns<br>Aggregated game counts, mean approval, and median reviews by price tier.</div>',
+                    unsafe_allow_html=True,
+                )
+                st.download_button(
+                    "Download Chart Summary (.csv)",
+                    data=summary_csv,
+                    file_name="under_the_radar_price_tier_summary.csv",
+                    mime="text/csv",
+                    use_container_width=True,
+                )
+
+        with st.expander("Preview Export Sample (Top 10 Hidden Gems)"):
+            st.dataframe(gems_export_df.head(10), use_container_width=True, hide_index=True)
+
+st.markdown(
+    """
+<div class="app-footer-bar">
+<span><strong>Under the Radar</strong> • Independent PC Game Discovery &amp; Market Observatory</span>
+<span>Live Data: Valve Steam Web API • Epic Games Store API • CheapShark Cross-Store Deals</span>
+</div>
+""",
+    unsafe_allow_html=True,
+)
