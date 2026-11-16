@@ -2,13 +2,12 @@
 app.py
 Under the Radar — Fast, Verified Multi-Store PC Game Discovery
 Features:
-  - Strict, accurate launcher verification (Steam, Epic, GOG, EA App, Ubisoft, Riot, Battle.net) — zero false tags
-  - Live concurrent player counts ("● X playing now") fetched in parallel for every game on screen
-  - Strict "Hide AAA Blockbusters" filter blocking mega-franchises (GTA, Elden Ring, Street Fighter, etc.)
-  - Spacious Featured Spotlight at top with uncropped object-fit:contain art & centered carousel dots
-  - Uncrowded 1-Row Command Bar with a wide 3-Column "Explore & Genres" Mega-Menu Panel
-  - Unified status/filter bar and uniform 460:215 card image framing across the grid
-  - Clean, isolated Insights & Charts page with Gem Score methodology breakdown + 3 chart types
+  - Fragment-isolated Spotlight & Catalog for ~20ms carousel turns and instant sorting
+  - Pre-indexed, cached multi-store filtering & sorting across 25,000+ PC games
+  - Compact, streamlined "Explore & Genres" popover panel (zero bulky 3-column sprawl)
+  - Tactile mouse hover & click-press micro-interactions on all buttons, pills, and cards
+  - Uncropped Spotlight cover art, centered carousel dots, and uniform 460:215 card framing
+  - Isolated Insights & Charts page with Gem Score methodology breakdown + 3 interactive charts
 """
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -41,6 +40,9 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
+# Fragment decorator with graceful fallback for older Streamlit versions
+_fragment = getattr(st, "fragment", None) or getattr(st, "experimental_fragment", None) or (lambda fn: fn)
+
 DATA_PATH = "data/steam_catalog.csv"
 
 defaults = {
@@ -54,8 +56,6 @@ defaults = {
     "selected_store": "All Launchers",
     "min_wilson": 50,
     "catalog_page": 0,
-    "trigger_modal": None,
-    "modal_game": None,
 }
 for k, v in defaults.items():
     if k not in st.session_state:
@@ -83,11 +83,6 @@ def _reset_all_filters(min_y: int, max_y: int) -> None:
     st.session_state["year_range"] = (min_y, max_y)
     st.session_state["min_wilson"] = 50
     st.session_state["catalog_page"] = 0
-
-
-def trigger_deep_dive(game_dict: dict) -> None:
-    st.session_state["modal_game"] = game_dict
-    st.session_state["trigger_modal"] = "deep_dive"
 
 
 def clean_text(raw: str) -> str:
@@ -428,7 +423,7 @@ def _fetch_single_live_ccu(appid: int) -> int | None:
         resp = requests.get(
             "https://api.steampowered.com/ISteamUserStats/GetNumberOfCurrentPlayers/v1/",
             params={"appid": int(appid)},
-            timeout=3.5,
+            timeout=2.0,
         )
         if resp.status_code == 200:
             payload = resp.json().get("response", {})
@@ -439,12 +434,13 @@ def _fetch_single_live_ccu(appid: int) -> int | None:
     return None
 
 
-def get_live_ccu_for_appids(appids: list[int]) -> dict[int, int | None]:
-    unique_ids = list({int(a) for a in appids if int(a) > 0})
+@st.cache_data(ttl=600, show_spinner=False)
+def get_live_ccu_batch(appids_tuple: tuple[int, ...]) -> dict[int, int | None]:
+    unique_ids = list({int(a) for a in appids_tuple if int(a) > 0})
     if not unique_ids:
         return {}
     out: dict[int, int | None] = {}
-    with ThreadPoolExecutor(max_workers=16) as pool:
+    with ThreadPoolExecutor(max_workers=18) as pool:
         fut_map = {pool.submit(_fetch_single_live_ccu, aid): aid for aid in unique_ids}
         for fut in as_completed(fut_map):
             aid = fut_map[fut]
@@ -471,7 +467,7 @@ def fetch_verified_reviews(appid: int, game_name: str = "", max_reviews: int = 6
                 "https://store.steampowered.com/api/storesearch/",
                 params={"term": game_name.strip(), "l": "english", "cc": "US"},
                 headers=headers,
-                timeout=5,
+                timeout=4,
             )
             if sr.status_code == 200:
                 for it in sr.json().get("items", [])[:2]:
@@ -502,7 +498,7 @@ def fetch_verified_reviews(appid: int, game_name: str = "", max_reviews: int = 6
                     f"https://store.steampowered.com/appreviews/{tid}",
                     params=params,
                     headers=headers,
-                    timeout=6,
+                    timeout=5,
                 )
                 if resp.status_code == 200:
                     raw_revs = resp.json().get("reviews", [])
@@ -561,6 +557,8 @@ AAA_PUBLISHER_PATTERN = re.compile(
 
 
 def apply_strict_non_aaa_filter(df: pd.DataFrame) -> pd.DataFrame:
+    if "_strict_non_aaa" in df.columns:
+        return df[df["_strict_non_aaa"]].copy()
     pub_col = df["publishers"].fillna("") if "publishers" in df.columns else pd.Series("", index=df.index)
     return df[
         (~df["is_aaa_blockbuster"])
@@ -613,22 +611,17 @@ div[data-testid="stMainBlockContainer"] {
     padding-bottom: 2.5rem !important;
 }
 
-@keyframes spotSlideIn {
-    0% {
-        opacity: 0.15;
-        transform: translateX(24px);
-    }
-    100% {
-        opacity: 1;
-        transform: translateX(0);
-    }
+@keyframes spotFadeIn {
+    0% { opacity: 0.45; transform: translateX(10px); }
+    100% { opacity: 1; transform: translateX(0); }
 }
 .spot-anim-card {
-    animation: spotSlideIn 0.32s cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation: spotFadeIn 0.16s ease-out both;
 }
 
-/* SLEEK, UNIFORM BUTTON DESIGN SYSTEM */
-div.stButton > button {
+/* TACTILE, MOUSE-REACTIVE BUTTON SYSTEM (CRISP HOVER + CLICK PRESS) */
+div.stButton > button,
+div[data-testid="stPopover"] > button {
     min-height: 42px !important;
     height: 42px !important;
     border-radius: 10px !important;
@@ -636,73 +629,85 @@ div.stButton > button {
     font-size: 0.84rem !important;
     font-weight: 600 !important;
     letter-spacing: -0.01em !important;
-    transition: all 0.18s cubic-bezier(0.22, 1, 0.36, 1) !important;
-    box-shadow: none !important;
+    cursor: pointer !important;
+    transition: transform 0.11s ease-out, background-color 0.14s ease, border-color 0.14s ease, box-shadow 0.14s ease, color 0.14s ease !important;
 }
 
 div.stButton > button[kind="primary"] {
     background: linear-gradient(135deg, #2563eb 0%, #4f46e5 100%) !important;
-    border: 1px solid rgba(96, 165, 250, 0.52) !important;
+    border: 1px solid rgba(147, 197, 253, 0.55) !important;
     color: #ffffff !important;
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 4px 14px rgba(37, 99, 235, 0.32) !important;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.24), 0 3px 10px rgba(37, 99, 235, 0.30) !important;
 }
 div.stButton > button[kind="primary"]:hover {
     background: linear-gradient(135deg, #3b82f6 0%, #6366f1 100%) !important;
-    border-color: #93c5fd !important;
+    border-color: #bfdbfe !important;
     transform: translateY(-1px) !important;
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3), 0 6px 20px rgba(59, 130, 246, 0.42) !important;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.32), 0 6px 18px rgba(59, 130, 246, 0.46) !important;
+}
+div.stButton > button[kind="primary"]:active {
+    transform: translateY(1px) scale(0.985) !important;
+    box-shadow: 0 2px 6px rgba(37, 99, 235, 0.35) !important;
+    transition-duration: 0.05s !important;
 }
 
 div.stButton > button[kind="secondary"],
 div[data-testid="stPopover"] > button {
-    min-height: 42px !important;
-    height: 42px !important;
-    background: rgba(24, 34, 58, 0.88) !important;
-    border: 1px solid rgba(99, 125, 175, 0.34) !important;
+    background: rgba(24, 34, 58, 0.90) !important;
+    border: 1px solid rgba(99, 125, 175, 0.36) !important;
     color: #e2e8f0 !important;
-    border-radius: 10px !important;
-    font-size: 0.84rem !important;
-    font-weight: 600 !important;
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06) !important;
-    transition: all 0.18s ease !important;
 }
 div.stButton > button[kind="secondary"]:hover,
 div[data-testid="stPopover"] > button:hover {
     background: rgba(37, 99, 235, 0.28) !important;
-    border-color: rgba(96, 165, 250, 0.72) !important;
+    border-color: #60a5fa !important;
     color: #ffffff !important;
     transform: translateY(-1px) !important;
+    box-shadow: 0 4px 14px rgba(37, 99, 235, 0.24) !important;
+}
+div.stButton > button[kind="secondary"]:active,
+div[data-testid="stPopover"] > button:active {
+    background: rgba(37, 99, 235, 0.38) !important;
+    transform: translateY(1px) scale(0.985) !important;
+    transition-duration: 0.05s !important;
 }
 div.stButton > button:disabled {
-    opacity: 0.38 !important;
+    opacity: 0.36 !important;
     transform: none !important;
+    cursor: not-allowed !important;
 }
 
-/* Mega-Menu Popover Panel Styling */
+/* Compact, Streamlined Explore & Genres Popover */
 div[data-testid="stPopoverBody"] {
-    background: linear-gradient(155deg, #0d1528 0%, #131c36 55%, #0e1e36 100%) !important;
-    border: 1px solid rgba(96, 165, 250, 0.45) !important;
-    border-radius: 16px !important;
-    padding: 20px 22px !important;
-    min-width: 780px !important;
-    max-width: 92vw !important;
-    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.78), inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
+    background: linear-gradient(155deg, #0d1528 0%, #131c36 60%, #0e1e36 100%) !important;
+    border: 1px solid rgba(96, 165, 250, 0.48) !important;
+    border-radius: 14px !important;
+    padding: 16px 18px !important;
+    min-width: 440px !important;
+    max-width: 470px !important;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.78), inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
 }
-.mega-col-title {
+div[data-testid="stPopoverBody"] div.stButton > button {
+    min-height: 34px !important;
+    height: 34px !important;
+    font-size: 0.79rem !important;
+    border-radius: 8px !important;
+    padding: 0 10px !important;
+}
+.mega-sec-title {
     font-family: 'Plus Jakarta Sans', sans-serif;
-    font-size: 0.78rem;
+    font-size: 0.73rem;
     font-weight: 800;
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: #93c5fd;
-    margin-bottom: 10px;
-    padding-bottom: 6px;
-    border-bottom: 1px solid rgba(99, 125, 175, 0.26);
+    margin: 2px 0 7px 0;
 }
-.mega-sub-note {
-    font-size: 0.8rem;
-    color: #cbd5e1;
-    margin: 6px 0 8px 0;
+.mega-divider {
+    height: 1px;
+    background: rgba(99, 125, 175, 0.22);
+    margin: 10px 0;
 }
 
 /* Uniform Search Bar, Dropdowns & Multi-Genre Tag Pills */
@@ -713,30 +718,37 @@ div[data-baseweb="input"] > div {
     min-height: 42px !important;
     height: 42px !important;
     color: #f8fafc !important;
+    transition: border-color 0.14s ease, box-shadow 0.14s ease !important;
+}
+div[data-baseweb="input"] > div:hover,
+div[data-baseweb="select"] > div:hover {
+    border-color: rgba(147, 197, 253, 0.65) !important;
 }
 div[data-baseweb="input"] input {
     font-size: 0.9rem !important;
 }
 div[data-baseweb="select"] > div {
     background: #0f172a !important;
-    border: 1px solid rgba(99, 125, 175, 0.32) !important;
+    border: 1px solid rgba(99, 125, 175, 0.34) !important;
     border-radius: 10px !important;
-    min-height: 42px !important;
+    min-height: 40px !important;
     color: #f8fafc !important;
+    cursor: pointer !important;
+    transition: border-color 0.14s ease, box-shadow 0.14s ease !important;
 }
 div[data-baseweb="input"] > div:focus-within,
 div[data-baseweb="select"] > div:focus-within {
     border-color: #60a5fa !important;
-    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.22) !important;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.24) !important;
 }
 span[data-baseweb="tag"] {
-    background: rgba(37, 99, 235, 0.32) !important;
-    border: 1px solid rgba(96, 165, 250, 0.55) !important;
+    background: rgba(37, 99, 235, 0.34) !important;
+    border: 1px solid rgba(96, 165, 250, 0.58) !important;
     color: #f0f9ff !important;
     border-radius: 6px !important;
 }
 
-/* Top Brand Bar — Generous Breathing Room */
+/* Top Brand Bar */
 .top-brand-strip {
     background: linear-gradient(125deg, #0f172a 0%, #191636 55%, #0d2137 100%);
     border: 1px solid rgba(99, 125, 175, 0.32);
@@ -997,11 +1009,12 @@ div[data-testid="stVerticalBlockBorderWrapper"] {
     padding: 14px !important;
     margin-bottom: 14px !important;
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3) !important;
-    transition: border-color 0.18s ease, transform 0.18s ease !important;
+    transition: border-color 0.14s ease, transform 0.14s ease, box-shadow 0.14s ease !important;
 }
 div[data-testid="stVerticalBlockBorderWrapper"]:hover {
-    border-color: rgba(96, 165, 250, 0.65) !important;
+    border-color: rgba(96, 165, 250, 0.72) !important;
     transform: translateY(-2px) !important;
+    box-shadow: 0 12px 28px rgba(37, 99, 235, 0.18) !important;
 }
 .card-img-wrap {
     width: 100%;
@@ -1157,12 +1170,17 @@ div[data-testid="stVerticalBlockBorderWrapper"]:hover {
     font-size: 0.76rem;
     padding: 3px 10px;
     border-radius: 6px;
-    transition: all 0.15s ease;
+    cursor: pointer !important;
+    transition: transform 0.1s ease-out, background-color 0.13s ease, border-color 0.13s ease, color 0.13s ease !important;
 }
 .store-link-btn:hover {
     border-color: #60a5fa;
-    background: rgba(37, 99, 235, 0.28);
+    background: rgba(37, 99, 235, 0.34);
     color: #ffffff !important;
+    transform: translateY(-1px);
+}
+.store-link-btn:active {
+    transform: translateY(1px) scale(0.97);
 }
 
 /* Luxury Editorial Insights Styling */
@@ -1445,24 +1463,21 @@ def format_tag_pills(row: pd.Series, limit: int = 4) -> str:
 
 
 # ===========================================================================
-# MEGA-MENU DISCOVERY VIEWS & 28-GENRE / TAG ENGINE
+# COMPACT EXPLORE & GENRES ENGINE (PRE-INDEXED + CACHED FOR INSTANT SORTING)
 # ===========================================================================
 CURATED_RADAR_VIEWS = [
     ("All PC Games", "All"),
-    ("AAA-Eclipsed Gems (±14d)", "Eclipsed"),
-    ("90%+ Critically Acclaimed", "Acclaimed"),
-    ("Hidden Gems Under $15", "BudgetGems"),
-    ("On Sale Right Now", "OnSale"),
+    ("AAA-Eclipsed (±14d)", "Eclipsed"),
+    ("90%+ Acclaimed", "Acclaimed"),
+    ("Gems Under $15", "BudgetGems"),
+    ("On Sale Now", "OnSale"),
     ("Free to Play", "FreeToPlay"),
 ]
 
 QUICK_GENRE_PRESETS = [
     ("Action & Roguelike", ["Action", "Roguelike & Roguelite"]),
-    ("RPG & Story-Rich", ["RPG", "Adventure"]),
-    ("Strategy & City Builder", ["Strategy", "City & Settlement"]),
-    ("Horror & Survival", ["Horror", "Survival"]),
-    ("Anime & Visual Novel", ["Anime", "Visual Novel"]),
-    ("Co-op & Multiplayer", ["Co-op & Multiplayer"]),
+    ("RPG & Story", ["RPG", "Adventure"]),
+    ("Strategy & Sim", ["Strategy", "City & Settlement"]),
 ]
 
 ALL_GENRE_TAGS = [
@@ -1525,7 +1540,7 @@ GENRE_REGEX_MAP = {
 }
 
 
-def apply_single_tag_filter(df: pd.DataFrame, tag_name: str, combined_text: pd.Series) -> pd.DataFrame:
+def apply_single_tag_filter(df: pd.DataFrame, tag_name: str) -> pd.DataFrame:
     if tag_name == "Battle Royale":
         return df[
             (~df["genres"].str.contains("Casual|Strategy", case=False, regex=True, na=False))
@@ -1556,38 +1571,8 @@ def apply_single_tag_filter(df: pd.DataFrame, tag_name: str, combined_text: pd.S
 
     pat = GENRE_REGEX_MAP.get(tag_name)
     if pat:
-        return df[combined_text.loc[df.index].str.contains(pat, case=False, regex=True, na=False)]
+        return df[df["_tag_blob"].str.contains(pat, case=False, regex=True, na=False)]
     return df
-
-
-def apply_mega_menu_filters(df: pd.DataFrame, view_name: str, selected_tags: list[str]) -> pd.DataFrame:
-    if df.empty:
-        return df
-
-    out = df
-    if view_name == "AAA-Eclipsed Gems (±14d)":
-        out = out[out["aaa_shadow_score"] >= 35.0]
-    elif view_name == "90%+ Critically Acclaimed":
-        out = out[out["wilson_score"] >= 90.0]
-    elif view_name == "Hidden Gems Under $15":
-        out = out[(out["effective_price_usd"] <= 15.0) & (out["wilson_score"] >= 80.0)]
-    elif view_name == "On Sale Right Now":
-        out = out[out["discount_pct"] > 0]
-    elif view_name == "Free to Play":
-        out = out[out["is_free"]]
-
-    if selected_tags:
-        combined_text = (
-            out["genres"].fillna("")
-            + " | "
-            + out["tags"].fillna("")
-            + " | "
-            + out["short_description"].fillna("")
-        )
-        for tag in selected_tags:
-            out = apply_single_tag_filter(out, tag, combined_text)
-
-    return out
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
@@ -1606,7 +1591,112 @@ def load_and_score_catalog(live_top_ids_tuple: tuple) -> pd.DataFrame:
         "|".join(detect_verified_stores(nm, int(aid), str(p), str(d)))
         for nm, aid, p, d in zip(scored_df["name"], scored_df["appid"], pub_s, dev_s)
     ]
+    # Pre-compute fast lookup columns once so sorting & filtering run in milliseconds
+    scored_df["_strict_non_aaa"] = (
+        (~scored_df["is_aaa_blockbuster"])
+        & (scored_df["total_reviews"] < 35000)
+        & (~scored_df["name"].str.contains(AAA_TITLE_PATTERN, na=False))
+        & (~pub_s.str.contains(AAA_PUBLISHER_PATTERN, na=False))
+    )
+    scored_df["_tag_blob"] = (
+        scored_df["genres"].fillna("")
+        + " | "
+        + scored_df["tags"].fillna("")
+        + " | "
+        + scored_df["short_description"].fillna("")
+    )
+    scored_df["_search_blob"] = (
+        scored_df["name"].fillna("")
+        + " | "
+        + scored_df["_tag_blob"]
+    )
+    scored_df["_discovery_boost"] = (
+        scored_df["hidden_gem_index"] + (scored_df["aaa_shadow_score"] * 0.35)
+    )
+    scored_df["_all_rank"] = (
+        scored_df["wilson_score"] * 0.7
+        + (scored_df["total_reviews"].clip(upper=300000) / 10000.0)
+        + scored_df["hidden_gem_index"] * 0.25
+    )
+    top_ids_set = set(live_top_ids_tuple)
+    scored_df["_live_rank"] = (
+        scored_df["appid"].isin(top_ids_set).astype(int) * 1_000_000
+        + scored_df["peak_ccu"].fillna(0) * 10
+        + scored_df["total_reviews"]
+    )
     return scored_df
+
+
+@st.cache_data(ttl=1800, show_spinner=False)
+def get_spotlight_pool(df: pd.DataFrame, hide_aaa: bool, seed: int) -> pd.DataFrame:
+    base = df[~df["is_demo_teaser"]].copy()
+    if hide_aaa:
+        base = base[base["_strict_non_aaa"]].sort_values(
+            ["hidden_gem_index", "aaa_shadow_score"], ascending=[False, False]
+        )
+    else:
+        base = base.sort_values("_all_rank", ascending=False)
+    candidates = base.head(40)
+    n_sample = min(10, len(candidates))
+    return candidates.sample(n=n_sample, random_state=int(seed)).reset_index(drop=True)
+
+
+@st.cache_data(ttl=600, show_spinner=False)
+def get_filtered_sorted_catalog(
+    df: pd.DataFrame,
+    hide_aaa: bool,
+    store_opt: str,
+    radar_view: str,
+    selected_tags: tuple[str, ...],
+    yr_low: int,
+    yr_high: int,
+    min_w: int,
+    search_q: str,
+    sort_by: str,
+) -> pd.DataFrame:
+    mask = (
+        (~df["is_demo_teaser"])
+        & (df["release_year"].between(yr_low, yr_high))
+        & (df["wilson_score"] >= min_w)
+    )
+    if hide_aaa:
+        mask = mask & df["_strict_non_aaa"]
+
+    if store_opt != "All Launchers":
+        mask = mask & df["verified_stores"].str.contains(re.escape(store_opt), regex=True, na=False)
+
+    if radar_view == "AAA-Eclipsed (±14d)":
+        mask = mask & (df["aaa_shadow_score"] >= 35.0)
+    elif radar_view == "90%+ Acclaimed":
+        mask = mask & (df["wilson_score"] >= 90.0)
+    elif radar_view == "Gems Under $15":
+        mask = mask & (df["effective_price_usd"] <= 15.0) & (df["wilson_score"] >= 80.0)
+    elif radar_view == "On Sale Now":
+        mask = mask & (df["discount_pct"] > 0)
+    elif radar_view == "Free to Play":
+        mask = mask & df["is_free"]
+
+    if search_q.strip():
+        mask = mask & df["_search_blob"].str.contains(re.escape(search_q.strip()), case=False, regex=True, na=False)
+
+    out = df[mask]
+
+    for tag in selected_tags:
+        out = apply_single_tag_filter(out, tag)
+
+    if sort_by == "Sort: Most Overshadowed":
+        return out.sort_values(["aaa_shadow_score", "hidden_gem_index"], ascending=[False, False])
+    if sort_by == "Sort: Highest Rated":
+        return out.sort_values("wilson_score", ascending=False)
+    if sort_by == "Sort: Trending Live":
+        return out.sort_values("_live_rank", ascending=False)
+    if sort_by == "Sort: Most Reviewed":
+        return out.sort_values("total_reviews", ascending=False)
+    if sort_by == "Sort: Newest Releases":
+        return out.sort_values("release_date", ascending=False)
+
+    rank_col = "_discovery_boost" if hide_aaa else "_all_rank"
+    return out.sort_values(rank_col, ascending=False)
 
 
 pulse = get_live_steam_pulse()
@@ -1690,11 +1780,397 @@ if hasattr(st, "dialog"):
                 )
             _, links_h = format_store_badges_and_links(pd.Series(game_dict))
             st.markdown(links_h, unsafe_allow_html=True)
+else:
 
-    active_trigger = st.session_state.get("trigger_modal")
-    if active_trigger == "deep_dive" and st.session_state.get("modal_game"):
-        st.session_state["trigger_modal"] = None
-        open_deep_dive_modal(st.session_state["modal_game"])
+    def open_deep_dive_modal(game_dict: dict):
+        st.info(f"{game_dict.get('name')} — {game_dict.get('short_description')}")
+
+
+# ===========================================================================
+# FRAGMENT-ISOLATED SECTIONS FOR INSTANT SPOTLIGHT & SORT INTERACTIONS
+# ===========================================================================
+@_fragment
+def render_featured_spotlight_fragment() -> None:
+    spotlight_pool = get_spotlight_pool(
+        df_all,
+        bool(st.session_state["hide_aaa"]),
+        int(st.session_state["spotlight_seed"]),
+    )
+    # Batch-fetch live player counts for all 10 spotlight titles in one parallel pass
+    spot_ccu_map = get_live_ccu_batch(tuple(int(a) for a in spotlight_pool["appid"].tolist()))
+
+    s_idx = int(st.session_state["spotlight_idx"]) % len(spotlight_pool)
+    anim_tick = int(st.session_state.get("spot_anim_tick", 0))
+    spot_row = spotlight_pool.iloc[s_idx]
+    spot_aid = int(spot_row["appid"])
+    spot_name = str(spot_row["name"])
+    img_url = html.escape(str(spot_row.get("header_image", "")))
+
+    spot_live_ccu = spot_ccu_map.get(spot_aid)
+    live_chip_html = (
+        f'<span class="stat-chip-live"><span class="live-dot"></span>{spot_live_ccu:,} playing now</span>'
+        if spot_live_ccu is not None
+        else f'<span class="stat-chip-score">GEM SCORE {spot_row["hidden_gem_index"]:.1f}/100</span>'
+    )
+
+    wilson_s = float(spot_row["wilson_score"])
+    revs_s = int(spot_row["total_reviews"])
+    shadow_txt = format_shadow_event(spot_row)
+    price_html = format_price_badge(spot_row)
+    s_badges, s_links = format_store_badges_and_links(spot_row)
+
+    kicker_txt = (
+        f"OVERSHADOWED GEM SPOTLIGHT • {s_idx + 1} OF {len(spotlight_pool)}"
+        if st.session_state["hide_aaa"]
+        else f"FEATURED SPOTLIGHT • {s_idx + 1} OF {len(spotlight_pool)}"
+    )
+
+    col_left, col_card, col_right = st.columns([0.055, 0.89, 0.055], gap="small")
+
+    with col_left:
+        st.markdown("<div style='height: 138px;'></div>", unsafe_allow_html=True)
+        if st.button("◀", key="spot_left_btn", use_container_width=True):
+            st.session_state["spotlight_idx"] = (s_idx - 1) % len(spotlight_pool)
+            st.session_state["spot_anim_tick"] = anim_tick + 1
+            st.rerun()
+
+    with col_card:
+        st.markdown(
+            f"""
+<div id="spot-card-{s_idx}-{anim_tick}" class="spotlight-unified spot-anim-card">
+<div class="spot-media-col">
+<img src="{img_url}" alt="{html.escape(spot_name)}" />
+</div>
+<div class="spot-info-col">
+<div class="spot-kicker">{kicker_txt}</div>
+<div class="spot-title">{html.escape(spot_name)}</div>
+<div class="spot-stats-row">
+{live_chip_html}
+<span class="stat-chip-rating">★ {wilson_s:.1f}% ({revs_s:,} reviews)</span>
+<span class="stat-chip-shadow">{html.escape(shadow_txt)}</span>
+{price_html}
+</div>
+{s_badges}
+{format_tag_pills(spot_row, limit=5)}
+<div class="spot-desc">{clean_text(spot_row['short_description'])}</div>
+<div class="spot-insight"><strong>Observatory Insight:</strong> {html.escape(str(spot_row['shadow_story']))}</div>
+{s_links}
+</div>
+</div>
+""",
+            unsafe_allow_html=True,
+        )
+
+    with col_right:
+        st.markdown("<div style='height: 138px;'></div>", unsafe_allow_html=True)
+        if st.button("▶", key="spot_right_btn", use_container_width=True):
+            st.session_state["spotlight_idx"] = (s_idx + 1) % len(spotlight_pool)
+            st.session_state["spot_anim_tick"] = anim_tick + 1
+            st.rerun()
+
+    sp_pad_l, sp_shuf, sp_dots, sp_cta, sp_pad_r = st.columns([0.055, 0.22, 0.45, 0.22, 0.055], gap="small")
+    with sp_shuf:
+        if st.button("↻ Shuffle Featured", key="spot_shuf_btn", use_container_width=True):
+            st.session_state["spotlight_seed"] = random.randint(1, 999999)
+            st.session_state["spotlight_idx"] = 0
+            st.session_state["spot_anim_tick"] = anim_tick + 1
+            st.rerun()
+    with sp_dots:
+        dots_str = " ".join(["●" if i == s_idx else "○" for i in range(len(spotlight_pool))])
+        st.markdown(f'<div class="carousel-dots">{dots_str}</div>', unsafe_allow_html=True)
+    with sp_cta:
+        if st.button("View Details & Prices", key=f"spot_dd_{spot_aid}_{s_idx}", type="primary", use_container_width=True):
+            open_deep_dive_modal(spot_row.to_dict())
+
+
+@_fragment
+def render_catalog_browser_fragment(min_year: int, max_year: int) -> None:
+    st.markdown('<div class="command-bar-divider"></div>', unsafe_allow_html=True)
+
+    active_filter_badges: list[str] = []
+    if st.session_state["radar_view"] != "All PC Games":
+        active_filter_badges.append(st.session_state["radar_view"])
+    if st.session_state.get("multi_genres"):
+        active_filter_badges.extend(st.session_state["multi_genres"])
+    if st.session_state["selected_store"] != "All Launchers":
+        active_filter_badges.append(st.session_state["selected_store"])
+    if st.session_state["min_wilson"] > 50:
+        active_filter_badges.append(f"★ {st.session_state['min_wilson']}%+")
+    if tuple(st.session_state["year_range"]) != (min_year, max_year):
+        yr0, yr1 = st.session_state["year_range"]
+        active_filter_badges.append(f"{yr0}–{yr1}")
+
+    mega_btn_label = (
+        f"🧭 Explore & Genres ({len(active_filter_badges)})"
+        if active_filter_badges
+        else "🧭 Explore & Genres"
+    )
+
+    sort_options = [
+        "Sort: Recommended",
+        "Sort: Most Overshadowed",
+        "Sort: Highest Rated",
+        "Sort: Trending Live",
+        "Sort: Most Reviewed",
+        "Sort: Newest Releases",
+    ]
+
+    cb_mega, cb_aaa, cb_search, cb_sort = st.columns([1.25, 1.35, 2.55, 1.15], gap="small")
+
+    with cb_mega:
+        mega_panel = (
+            st.popover(mega_btn_label, use_container_width=True)
+            if hasattr(st, "popover")
+            else st.expander(mega_btn_label)
+        )
+        with mega_panel:
+            st.markdown('<div class="mega-sec-title">Curated Radar Views</div>', unsafe_allow_html=True)
+            v_cols = st.columns(2, gap="small")
+            for idx_v, (view_lbl, view_key) in enumerate(CURATED_RADAR_VIEWS):
+                is_v_active = st.session_state["radar_view"] == view_lbl
+                v_cols[idx_v % 2].button(
+                    view_lbl,
+                    key=f"mega_view_{view_key}",
+                    type="primary" if is_v_active else "secondary",
+                    on_click=_set_radar_view,
+                    args=(view_lbl,),
+                    use_container_width=True,
+                )
+
+            st.markdown('<div class="mega-divider"></div>', unsafe_allow_html=True)
+            st.markdown('<div class="mega-sec-title">Genres &amp; Tags (28 Categories)</div>', unsafe_allow_html=True)
+            st.multiselect(
+                "Combine Genres & Tags",
+                options=ALL_GENRE_TAGS,
+                key="multi_genres",
+                placeholder="Select 1 or combine tags (e.g., Horror, Survival)...",
+                on_change=_reset_catalog_page,
+                label_visibility="collapsed",
+            )
+            pr_cols = st.columns(3, gap="small")
+            for idx_p, (preset_lbl, preset_tags) in enumerate(QUICK_GENRE_PRESETS):
+                is_p_active = st.session_state.get("multi_genres") == preset_tags
+                pr_cols[idx_p].button(
+                    preset_lbl,
+                    key=f"mega_preset_{idx_p}",
+                    type="primary" if is_p_active else "secondary",
+                    on_click=_apply_genre_preset,
+                    args=(preset_tags,),
+                    use_container_width=True,
+                )
+
+            st.markdown('<div class="mega-divider"></div>', unsafe_allow_html=True)
+            st.markdown('<div class="mega-sec-title">Launcher &amp; Quality</div>', unsafe_allow_html=True)
+            lq_c1, lq_c2 = st.columns([1.3, 1.0], gap="small")
+            with lq_c1:
+                store_options = [
+                    "All Launchers",
+                    "Steam",
+                    "Epic Games Store",
+                    "GOG",
+                    "EA App",
+                    "Ubisoft Connect",
+                    "Riot Client",
+                    "Battle.net",
+                ]
+                st.selectbox(
+                    "Store Launcher",
+                    options=store_options,
+                    key="selected_store",
+                    on_change=_reset_catalog_page,
+                    label_visibility="collapsed",
+                )
+            with lq_c2:
+                st.button(
+                    "Reset Filters",
+                    key="mega_reset_btn",
+                    on_click=_reset_all_filters,
+                    args=(min_year, max_year),
+                    use_container_width=True,
+                )
+
+            sl_c1, sl_c2 = st.columns(2, gap="small")
+            with sl_c1:
+                st.slider(
+                    "Release Years",
+                    min_year,
+                    max_year,
+                    key="year_range",
+                    on_change=_reset_catalog_page,
+                )
+            with sl_c2:
+                st.slider(
+                    "Min Rating (%)",
+                    0,
+                    95,
+                    key="min_wilson",
+                    on_change=_reset_catalog_page,
+                )
+
+    with cb_aaa:
+        aaa_hidden = bool(st.session_state["hide_aaa"])
+        btn_label = "✓ AAA Hidden (Gems Only)" if aaa_hidden else "Hide AAA Blockbusters"
+        if st.button(
+            btn_label,
+            key="toggle_aaa_btn",
+            type="primary" if aaa_hidden else "secondary",
+            use_container_width=True,
+        ):
+            st.session_state["hide_aaa"] = not aaa_hidden
+            st.session_state["catalog_page"] = 0
+            st.session_state["spotlight_idx"] = 0
+            st.rerun(scope="app")
+
+    with cb_search:
+        search_q = st.text_input(
+            "Search Games",
+            placeholder="🔍  Search 25,000+ PC games by title, genre, or studio...",
+            label_visibility="collapsed",
+        )
+
+    with cb_sort:
+        sort_by = st.selectbox("Sort", options=sort_options, index=0, label_visibility="collapsed")
+
+    yr_low, yr_high = st.session_state["year_range"]
+    min_w = int(st.session_state["min_wilson"])
+    store_opt = st.session_state["selected_store"]
+    selected_tags = tuple(st.session_state.get("multi_genres", []))
+
+    filtered = get_filtered_sorted_catalog(
+        df=df_all,
+        hide_aaa=bool(st.session_state["hide_aaa"]),
+        store_opt=store_opt,
+        radar_view=st.session_state["radar_view"],
+        selected_tags=selected_tags,
+        yr_low=int(yr_low),
+        yr_high=int(yr_high),
+        min_w=min_w,
+        search_q=search_q,
+        sort_by=sort_by,
+    )
+
+    if st.session_state["hide_aaa"]:
+        overshadowed_n = int((filtered["aaa_shadow_score"] >= 35.0).sum())
+        st.markdown(
+            f"""
+<div class="aaa-mode-banner">
+<span>🛡️ <strong>AAA Blockbusters Hidden</strong> — Showing <strong>{len(filtered):,}</strong> indie &amp; AA games (<strong>{overshadowed_n:,} overshadowed gems</strong> boosted).</span>
+<span class="aaa-banner-hint">Turn off AAA Hidden to see everything</span>
+</div>
+""",
+            unsafe_allow_html=True,
+        )
+
+    if filtered.empty:
+        st.info("No games match your current search or filters. Open **Explore & Genres** and click **Reset Filters**.")
+        return
+
+    page_size = 18
+    total_matching = len(filtered)
+    total_pages = max(1, (total_matching + page_size - 1) // page_size)
+    curr_page = min(int(st.session_state["catalog_page"]), total_pages - 1)
+    st.session_state["catalog_page"] = curr_page
+
+    start_idx = curr_page * page_size
+    end_idx = min(start_idx + page_size, total_matching)
+
+    mode_label = "Indie & AA Gems" if st.session_state["hide_aaa"] else "All PC Games"
+    chips_html = "".join([f'<span class="filter-chip-pill">{html.escape(b)}</span>' for b in active_filter_badges])
+
+    if active_filter_badges:
+        st_left, st_clear = st.columns([5.2, 0.75], gap="small")
+        with st_left:
+            st.markdown(
+                f"""
+<div class="unified-status-bar">
+<div class="status-left-group">
+<span>Showing <strong>{start_idx + 1}–{end_idx}</strong> of <strong>{total_matching:,}</strong> ({mode_label})</span>
+{chips_html}
+</div>
+<span>Page <strong>{curr_page + 1}</strong> of <strong>{total_pages:,}</strong></span>
+</div>
+""",
+                unsafe_allow_html=True,
+            )
+        with st_clear:
+            st.button(
+                "✕ Clear",
+                key="clear_active_strip_btn",
+                on_click=_reset_all_filters,
+                args=(min_year, max_year),
+                use_container_width=True,
+            )
+    else:
+        st.markdown(
+            f"""
+<div class="unified-status-bar">
+<div class="status-left-group">
+<span>Showing <strong>{start_idx + 1}–{end_idx}</strong> of <strong>{total_matching:,} games</strong> ({mode_label})</span>
+</div>
+<span>Page <strong>{curr_page + 1}</strong> of <strong>{total_pages:,}</strong></span>
+</div>
+""",
+            unsafe_allow_html=True,
+        )
+
+    page_slice = filtered.iloc[start_idx:end_idx].reset_index(drop=True)
+    live_ccu_map = get_live_ccu_batch(tuple(int(a) for a in page_slice["appid"].tolist()))
+
+    for r_start in range(0, len(page_slice), 3):
+        cols = st.columns(3, gap="medium")
+        for c_i in range(3):
+            if r_start + c_i >= len(page_slice):
+                break
+            row = page_slice.iloc[r_start + c_i]
+            aid = int(row["appid"])
+            g_name_esc = html.escape(str(row["name"]))
+            with cols[c_i]:
+                with st.container(border=True):
+                    if row["header_image"]:
+                        card_img_esc = html.escape(str(row["header_image"]))
+                        st.markdown(
+                            f'<div class="card-img-wrap"><img src="{card_img_esc}" alt="{g_name_esc}" loading="lazy" /></div>',
+                            unsafe_allow_html=True,
+                        )
+
+                    price_html = format_price_badge(row)
+                    ccu_html = format_live_players_badge(row, live_ccu_map)
+                    st.markdown(
+                        f'<div class="card-top-row">{ccu_html}{price_html}</div>',
+                        unsafe_allow_html=True,
+                    )
+                    st.markdown(f'<div class="card-title">{g_name_esc}</div>', unsafe_allow_html=True)
+                    st.markdown(
+                        f'<div class="card-meta">{row["release_date"]} • <span class="star-gold">★ {row["wilson_score"]:.1f}%</span> ({int(row["total_reviews"]):,} reviews)</div>',
+                        unsafe_allow_html=True,
+                    )
+                    st_badges, st_links = format_store_badges_and_links(row)
+                    st.markdown(st_badges, unsafe_allow_html=True)
+
+                    desc_short = clean_text(row["short_description"])
+                    if len(desc_short) > 105:
+                        desc_short = desc_short[:102] + "..."
+                    st.markdown(f'<div class="card-desc">{desc_short}</div>', unsafe_allow_html=True)
+                    st.markdown(st_links, unsafe_allow_html=True)
+
+                    if st.button("View Details & Prices", key=f"dd_grid_{curr_page}_{aid}", use_container_width=True):
+                        open_deep_dive_modal(row.to_dict())
+
+    pg1, pg2, pg3 = st.columns([1.0, 1.6, 1.0])
+    with pg1:
+        if st.button("← Previous Page", disabled=(curr_page == 0), use_container_width=True):
+            st.session_state["catalog_page"] = max(0, curr_page - 1)
+            st.rerun()
+    with pg2:
+        st.markdown(
+            f"<div style='text-align:center; padding-top:10px; font-size:0.86rem; color:#cbd5e1;'>"
+            f"Page <strong>{curr_page + 1}</strong> of <strong>{total_pages:,}</strong> ({total_matching:,} total games)</div>",
+            unsafe_allow_html=True,
+        )
+    with pg3:
+        if st.button("Next Page →", disabled=(curr_page >= total_pages - 1), use_container_width=True):
+            st.session_state["catalog_page"] = min(total_pages - 1, curr_page + 1)
+            st.rerun()
 
 
 # ===========================================================================
@@ -1747,7 +2223,6 @@ for idx, (label, key_name) in enumerate(pages):
 
 current_page = st.session_state["nav_page"]
 
-# Dedicated page slot guarantees 100% DOM isolation between Discover and Insights
 page_slot = st.empty()
 
 with page_slot.container():
@@ -1760,451 +2235,8 @@ with page_slot.container():
         if "year_range" not in st.session_state:
             st.session_state["year_range"] = (min_year, max_year)
 
-        # -------------------------------------------------------------------
-        # 1. FEATURED SPOTLIGHT AT THE TOP (UNCROPPED ART + CENTERED DOTS)
-        # -------------------------------------------------------------------
-        spotlight_base = df_all[~df_all["is_demo_teaser"]].copy()
-        if st.session_state["hide_aaa"]:
-            spotlight_base = apply_strict_non_aaa_filter(spotlight_base).sort_values(
-                ["hidden_gem_index", "aaa_shadow_score"], ascending=[False, False]
-            )
-        else:
-            spotlight_base["_spot_rank"] = (
-                spotlight_base["wilson_score"] * 0.7
-                + (spotlight_base["total_reviews"].clip(upper=300000) / 10000.0)
-                + spotlight_base["hidden_gem_index"] * 0.25
-            )
-            spotlight_base = spotlight_base.sort_values("_spot_rank", ascending=False)
-
-        spotlight_candidates = spotlight_base.head(40)
-        n_sample = min(10, len(spotlight_candidates))
-        spotlight_pool = spotlight_candidates.sample(
-            n=n_sample, random_state=int(st.session_state["spotlight_seed"])
-        ).reset_index(drop=True)
-
-        s_idx = int(st.session_state["spotlight_idx"]) % len(spotlight_pool)
-        anim_tick = int(st.session_state.get("spot_anim_tick", 0))
-        spot_row = spotlight_pool.iloc[s_idx]
-        spot_aid = int(spot_row["appid"])
-        spot_name = str(spot_row["name"])
-        img_url = html.escape(str(spot_row.get("header_image", "")))
-
-        spot_live_ccu = _fetch_single_live_ccu(spot_aid)
-        live_chip_html = (
-            f'<span class="stat-chip-live"><span class="live-dot"></span>{spot_live_ccu:,} playing now</span>'
-            if spot_live_ccu is not None
-            else f'<span class="stat-chip-score">GEM SCORE {spot_row["hidden_gem_index"]:.1f}/100</span>'
-        )
-
-        wilson_s = float(spot_row["wilson_score"])
-        revs_s = int(spot_row["total_reviews"])
-        shadow_txt = format_shadow_event(spot_row)
-        price_html = format_price_badge(spot_row)
-        s_badges, s_links = format_store_badges_and_links(spot_row)
-
-        kicker_txt = (
-            f"OVERSHADOWED GEM SPOTLIGHT • {s_idx + 1} OF {len(spotlight_pool)}"
-            if st.session_state["hide_aaa"]
-            else f"FEATURED SPOTLIGHT • {s_idx + 1} OF {len(spotlight_pool)}"
-        )
-
-        col_left, col_card, col_right = st.columns([0.055, 0.89, 0.055], gap="small")
-
-        with col_left:
-            st.markdown("<div style='height: 138px;'></div>", unsafe_allow_html=True)
-            if st.button("◀", key="spot_left_btn", use_container_width=True):
-                st.session_state["spotlight_idx"] = (s_idx - 1) % len(spotlight_pool)
-                st.session_state["spot_anim_tick"] = anim_tick + 1
-                st.rerun()
-
-        with col_card:
-            st.markdown(
-                f"""
-<div id="spot-card-{s_idx}-{anim_tick}" class="spotlight-unified spot-anim-card">
-<div class="spot-media-col">
-<img src="{img_url}" alt="{html.escape(spot_name)}" />
-</div>
-<div class="spot-info-col">
-<div class="spot-kicker">{kicker_txt}</div>
-<div class="spot-title">{html.escape(spot_name)}</div>
-<div class="spot-stats-row">
-{live_chip_html}
-<span class="stat-chip-rating">★ {wilson_s:.1f}% ({revs_s:,} reviews)</span>
-<span class="stat-chip-shadow">{html.escape(shadow_txt)}</span>
-{price_html}
-</div>
-{s_badges}
-{format_tag_pills(spot_row, limit=5)}
-<div class="spot-desc">{clean_text(spot_row['short_description'])}</div>
-<div class="spot-insight"><strong>Observatory Insight:</strong> {html.escape(str(spot_row['shadow_story']))}</div>
-{s_links}
-</div>
-</div>
-""",
-                unsafe_allow_html=True,
-            )
-
-        with col_right:
-            st.markdown("<div style='height: 138px;'></div>", unsafe_allow_html=True)
-            if st.button("▶", key="spot_right_btn", use_container_width=True):
-                st.session_state["spotlight_idx"] = (s_idx + 1) % len(spotlight_pool)
-                st.session_state["spot_anim_tick"] = anim_tick + 1
-                st.rerun()
-
-        # Balanced Spotlight Footer: Left Button | Centered Dots | Right CTA
-        sp_pad_l, sp_shuf, sp_dots, sp_cta, sp_pad_r = st.columns([0.055, 0.22, 0.45, 0.22, 0.055], gap="small")
-        with sp_shuf:
-            if st.button("↻ Shuffle Featured", key="spot_shuf_btn", use_container_width=True):
-                st.session_state["spotlight_seed"] = random.randint(1, 999999)
-                st.session_state["spotlight_idx"] = 0
-                st.session_state["spot_anim_tick"] = anim_tick + 1
-                st.rerun()
-        with sp_dots:
-            dots_str = " ".join(["●" if i == s_idx else "○" for i in range(len(spotlight_pool))])
-            st.markdown(f'<div class="carousel-dots">{dots_str}</div>', unsafe_allow_html=True)
-        with sp_cta:
-            if st.button("View Details & Prices", key=f"spot_dd_{spot_aid}_{s_idx}", type="primary", use_container_width=True):
-                trigger_deep_dive(spot_row.to_dict())
-                st.rerun()
-
-        # -------------------------------------------------------------------
-        # 2. CLEAN 1-ROW COMMAND BAR + 3-COLUMN "EXPLORE & GENRES" MEGA-PANEL
-        # -------------------------------------------------------------------
-        st.markdown('<div class="command-bar-divider"></div>', unsafe_allow_html=True)
-
-        active_filter_badges: list[str] = []
-        if st.session_state["radar_view"] != "All PC Games":
-            active_filter_badges.append(st.session_state["radar_view"])
-        if st.session_state.get("multi_genres"):
-            active_filter_badges.extend(st.session_state["multi_genres"])
-        if st.session_state["selected_store"] != "All Launchers":
-            active_filter_badges.append(st.session_state["selected_store"])
-        if st.session_state["min_wilson"] > 50:
-            active_filter_badges.append(f"★ {st.session_state['min_wilson']}%+")
-        if tuple(st.session_state["year_range"]) != (min_year, max_year):
-            yr0, yr1 = st.session_state["year_range"]
-            active_filter_badges.append(f"{yr0}–{yr1}")
-
-        mega_btn_label = (
-            f"🧭 Explore & Genres ({len(active_filter_badges)})"
-            if active_filter_badges
-            else "🧭 Explore & Genres"
-        )
-
-        sort_options = [
-            "Sort: Recommended",
-            "Sort: Most Overshadowed",
-            "Sort: Highest Rated",
-            "Sort: Trending Live",
-            "Sort: Most Reviewed",
-            "Sort: Newest Releases",
-        ]
-
-        cb_mega, cb_aaa, cb_search, cb_sort = st.columns([1.25, 1.35, 2.55, 1.15], gap="small")
-
-        with cb_mega:
-            mega_panel = (
-                st.popover(mega_btn_label, use_container_width=True)
-                if hasattr(st, "popover")
-                else st.expander(mega_btn_label)
-            )
-            with mega_panel:
-                m_col1, m_col2, m_col3 = st.columns([1.05, 1.45, 1.0], gap="large")
-
-                # Column 1: Curated Radar Views
-                with m_col1:
-                    st.markdown('<div class="mega-col-title">Curated Radar Views</div>', unsafe_allow_html=True)
-                    for view_lbl, view_key in CURATED_RADAR_VIEWS:
-                        is_v_active = st.session_state["radar_view"] == view_lbl
-                        st.button(
-                            view_lbl,
-                            key=f"mega_view_{view_key}",
-                            type="primary" if is_v_active else "secondary",
-                            on_click=_set_radar_view,
-                            args=(view_lbl,),
-                            use_container_width=True,
-                        )
-
-                # Column 2: All 28 Genres & Tags + Quick Presets
-                with m_col2:
-                    st.markdown('<div class="mega-col-title">Genres &amp; Tags (28 Categories)</div>', unsafe_allow_html=True)
-                    st.multiselect(
-                        "Combine Genres & Tags",
-                        options=ALL_GENRE_TAGS,
-                        key="multi_genres",
-                        placeholder="Pick 1 or combine multiple tags (e.g., Horror, Survival)...",
-                        on_change=_reset_catalog_page,
-                        label_visibility="collapsed",
-                    )
-                    st.markdown('<div class="mega-sub-note">Quick Playstyle Presets:</div>', unsafe_allow_html=True)
-                    p_left, p_right = st.columns(2, gap="small")
-                    for idx_p, (preset_lbl, preset_tags) in enumerate(QUICK_GENRE_PRESETS):
-                        target_col = p_left if idx_p % 2 == 0 else p_right
-                        is_p_active = st.session_state.get("multi_genres") == preset_tags
-                        target_col.button(
-                            preset_lbl,
-                            key=f"mega_preset_{idx_p}",
-                            type="primary" if is_p_active else "secondary",
-                            on_click=_apply_genre_preset,
-                            args=(preset_tags,),
-                            use_container_width=True,
-                        )
-
-                # Column 3: Launchers, Release Era & Rating Threshold
-                with m_col3:
-                    st.markdown('<div class="mega-col-title">Launchers &amp; Quality</div>', unsafe_allow_html=True)
-                    store_options = [
-                        "All Launchers",
-                        "Steam",
-                        "Epic Games Store",
-                        "GOG",
-                        "EA App",
-                        "Ubisoft Connect",
-                        "Riot Client",
-                        "Battle.net",
-                    ]
-                    st.selectbox(
-                        "Store Launcher",
-                        options=store_options,
-                        key="selected_store",
-                        on_change=_reset_catalog_page,
-                    )
-                    st.slider(
-                        "Release Years",
-                        min_year,
-                        max_year,
-                        key="year_range",
-                        on_change=_reset_catalog_page,
-                    )
-                    st.slider(
-                        "Minimum Buyer Rating (%)",
-                        0,
-                        95,
-                        key="min_wilson",
-                        on_change=_reset_catalog_page,
-                    )
-                    st.button(
-                        "Reset All Filters",
-                        key="mega_reset_btn",
-                        on_click=_reset_all_filters,
-                        args=(min_year, max_year),
-                        use_container_width=True,
-                    )
-
-        with cb_aaa:
-            aaa_hidden = bool(st.session_state["hide_aaa"])
-            btn_label = "✓ AAA Hidden (Gems Only)" if aaa_hidden else "Hide AAA Blockbusters"
-            if st.button(
-                btn_label,
-                key="toggle_aaa_btn",
-                type="primary" if aaa_hidden else "secondary",
-                use_container_width=True,
-            ):
-                st.session_state["hide_aaa"] = not aaa_hidden
-                st.session_state["catalog_page"] = 0
-                st.session_state["spotlight_idx"] = 0
-                st.session_state["spot_anim_tick"] = anim_tick + 1
-                st.rerun()
-
-        with cb_search:
-            search_q = st.text_input(
-                "Search Games",
-                placeholder="🔍  Search 25,000+ PC games by title, genre, or studio...",
-                label_visibility="collapsed",
-            )
-
-        with cb_sort:
-            sort_by = st.selectbox("Sort", options=sort_options, index=0, label_visibility="collapsed")
-
-        # Filter Catalog
-        yr_low, yr_high = st.session_state["year_range"]
-        min_w = int(st.session_state["min_wilson"])
-        store_opt = st.session_state["selected_store"]
-        selected_tags = list(st.session_state.get("multi_genres", []))
-
-        filtered = df_all[
-            (~df_all["is_demo_teaser"])
-            & (df_all["release_year"].between(yr_low, yr_high))
-            & (df_all["wilson_score"] >= min_w)
-        ].copy()
-
-        if st.session_state["hide_aaa"]:
-            filtered = apply_strict_non_aaa_filter(filtered)
-
-        if store_opt != "All Launchers":
-            filtered = filtered[
-                filtered["verified_stores"].apply(
-                    lambda s: store_opt in str(s).split("|")
-                )
-            ]
-
-        filtered = apply_mega_menu_filters(filtered, st.session_state["radar_view"], selected_tags)
-
-        if search_q.strip():
-            q = search_q.strip()
-            filtered = filtered[
-                filtered["name"].str.contains(q, case=False, na=False)
-                | filtered["short_description"].str.contains(q, case=False, na=False)
-                | filtered["genres"].str.contains(q, case=False, na=False)
-                | filtered["tags"].str.contains(q, case=False, na=False)
-            ]
-
-        if sort_by == "Sort: Most Overshadowed":
-            filtered = filtered.sort_values(["aaa_shadow_score", "hidden_gem_index"], ascending=[False, False])
-        elif sort_by == "Sort: Highest Rated":
-            filtered = filtered.sort_values("wilson_score", ascending=False)
-        elif sort_by == "Sort: Trending Live":
-            top_ids_set = set(pulse.get("top_played_ids", []))
-            filtered["_live_rank"] = (
-                filtered["appid"].isin(top_ids_set).astype(int) * 1_000_000
-                + filtered["peak_ccu"].fillna(0) * 10
-                + filtered["total_reviews"]
-            )
-            filtered = filtered.sort_values("_live_rank", ascending=False)
-        elif sort_by == "Sort: Most Reviewed":
-            filtered = filtered.sort_values("total_reviews", ascending=False)
-        elif sort_by == "Sort: Newest Releases":
-            filtered = filtered.sort_values("release_date", ascending=False)
-        else:
-            if st.session_state["hide_aaa"]:
-                filtered["_discovery_boost"] = (
-                    filtered["hidden_gem_index"] + (filtered["aaa_shadow_score"] * 0.35)
-                )
-                filtered = filtered.sort_values("_discovery_boost", ascending=False)
-            else:
-                filtered["_all_rank"] = (
-                    filtered["wilson_score"] * 0.7
-                    + (filtered["total_reviews"].clip(upper=300000) / 10000.0)
-                    + filtered["hidden_gem_index"] * 0.25
-                )
-                filtered = filtered.sort_values("_all_rank", ascending=False)
-
-        # Concise Single-Line AAA Banner (Only Shown When Toggle Is Active)
-        if st.session_state["hide_aaa"]:
-            overshadowed_n = int((filtered["aaa_shadow_score"] >= 35.0).sum())
-            st.markdown(
-                f"""
-<div class="aaa-mode-banner">
-<span>🛡️ <strong>AAA Blockbusters Hidden</strong> — Showing <strong>{len(filtered):,}</strong> indie &amp; AA games (<strong>{overshadowed_n:,} overshadowed gems</strong> boosted).</span>
-<span class="aaa-banner-hint">Turn off AAA Hidden to see everything</span>
-</div>
-""",
-                unsafe_allow_html=True,
-            )
-
-        # -------------------------------------------------------------------
-        # 3. PAGINATED GAMES GRID WITH UNIFIED STATUS/FILTER BAR & UNIFORM ART
-        # -------------------------------------------------------------------
-        if filtered.empty:
-            st.info("No games match your current search or filters. Open **Explore & Genres** and click **Reset All Filters**.")
-        else:
-            page_size = 18
-            total_matching = len(filtered)
-            total_pages = max(1, (total_matching + page_size - 1) // page_size)
-            curr_page = min(int(st.session_state["catalog_page"]), total_pages - 1)
-            st.session_state["catalog_page"] = curr_page
-
-            start_idx = curr_page * page_size
-            end_idx = min(start_idx + page_size, total_matching)
-
-            mode_label = "Indie & AA Gems" if st.session_state["hide_aaa"] else "All PC Games"
-            chips_html = "".join([f'<span class="filter-chip-pill">{html.escape(b)}</span>' for b in active_filter_badges])
-
-            if active_filter_badges:
-                st_left, st_clear = st.columns([5.2, 0.75], gap="small")
-                with st_left:
-                    st.markdown(
-                        f"""
-<div class="unified-status-bar">
-<div class="status-left-group">
-<span>Showing <strong>{start_idx + 1}–{end_idx}</strong> of <strong>{total_matching:,}</strong> ({mode_label})</span>
-{chips_html}
-</div>
-<span>Page <strong>{curr_page + 1}</strong> of <strong>{total_pages:,}</strong></span>
-</div>
-""",
-                        unsafe_allow_html=True,
-                    )
-                with st_clear:
-                    st.button(
-                        "✕ Clear",
-                        key="clear_active_strip_btn",
-                        on_click=_reset_all_filters,
-                        args=(min_year, max_year),
-                        use_container_width=True,
-                    )
-            else:
-                st.markdown(
-                    f"""
-<div class="unified-status-bar">
-<div class="status-left-group">
-<span>Showing <strong>{start_idx + 1}–{end_idx}</strong> of <strong>{total_matching:,} games</strong> ({mode_label})</span>
-</div>
-<span>Page <strong>{curr_page + 1}</strong> of <strong>{total_pages:,}</strong></span>
-</div>
-""",
-                    unsafe_allow_html=True,
-                )
-
-            page_slice = filtered.iloc[start_idx:end_idx].reset_index(drop=True)
-            live_ccu_map = get_live_ccu_for_appids(page_slice["appid"].tolist())
-
-            for r_start in range(0, len(page_slice), 3):
-                cols = st.columns(3, gap="medium")
-                for c_i in range(3):
-                    if r_start + c_i >= len(page_slice):
-                        break
-                    row = page_slice.iloc[r_start + c_i]
-                    aid = int(row["appid"])
-                    g_name_esc = html.escape(str(row["name"]))
-                    with cols[c_i]:
-                        with st.container(border=True):
-                            if row["header_image"]:
-                                card_img_esc = html.escape(str(row["header_image"]))
-                                st.markdown(
-                                    f'<div class="card-img-wrap"><img src="{card_img_esc}" alt="{g_name_esc}" loading="lazy" /></div>',
-                                    unsafe_allow_html=True,
-                                )
-
-                            price_html = format_price_badge(row)
-                            ccu_html = format_live_players_badge(row, live_ccu_map)
-                            st.markdown(
-                                f'<div class="card-top-row">{ccu_html}{price_html}</div>',
-                                unsafe_allow_html=True,
-                            )
-                            st.markdown(f'<div class="card-title">{g_name_esc}</div>', unsafe_allow_html=True)
-                            st.markdown(
-                                f'<div class="card-meta">{row["release_date"]} • <span class="star-gold">★ {row["wilson_score"]:.1f}%</span> ({int(row["total_reviews"]):,} reviews)</div>',
-                                unsafe_allow_html=True,
-                            )
-                            st_badges, st_links = format_store_badges_and_links(row)
-                            st.markdown(st_badges, unsafe_allow_html=True)
-
-                            desc_short = clean_text(row["short_description"])
-                            if len(desc_short) > 105:
-                                desc_short = desc_short[:102] + "..."
-                            st.markdown(f'<div class="card-desc">{desc_short}</div>', unsafe_allow_html=True)
-                            st.markdown(st_links, unsafe_allow_html=True)
-
-                            if st.button("View Details & Prices", key=f"dd_grid_{curr_page}_{aid}", use_container_width=True):
-                                trigger_deep_dive(row.to_dict())
-                                st.rerun()
-
-            pg1, pg2, pg3 = st.columns([1.0, 1.6, 1.0])
-            with pg1:
-                if st.button("← Previous Page", disabled=(curr_page == 0), use_container_width=True):
-                    st.session_state["catalog_page"] = max(0, curr_page - 1)
-                    st.rerun()
-            with pg2:
-                st.markdown(
-                    f"<div style='text-align:center; padding-top:10px; font-size:0.86rem; color:#cbd5e1;'>"
-                    f"Page <strong>{curr_page + 1}</strong> of <strong>{total_pages:,}</strong> ({total_matching:,} total games)</div>",
-                    unsafe_allow_html=True,
-                )
-            with pg3:
-                if st.button("Next Page →", disabled=(curr_page >= total_pages - 1), use_container_width=True):
-                    st.session_state["catalog_page"] = min(total_pages - 1, curr_page + 1)
-                    st.rerun()
+        render_featured_spotlight_fragment()
+        render_catalog_browser_fragment(min_year, max_year)
 
     # =======================================================================
     # PAGE 2: INSIGHTS & CHARTS (GEM SCORE METHODOLOGY + SCATTER + DONUT + BAR)
@@ -2264,9 +2296,6 @@ Analyzing 25,000+ PC releases reveals a clear pattern: thousands of player-loved
                 unsafe_allow_html=True,
             )
 
-        # -------------------------------------------------------------------
-        # HOW THE GEM SCORE IS CALCULATED (METHODOLOGY & FORMULA BREAKDOWN)
-        # -------------------------------------------------------------------
         st.markdown(
             """
 <div class="formula-section-box">
@@ -2301,9 +2330,6 @@ Analyzing 25,000+ PC releases reveals a clear pattern: thousands of player-loved
             unsafe_allow_html=True,
         )
 
-        # -------------------------------------------------------------------
-        # ROW 1: CHART 1 (BUBBLE SCATTER PLOT) + CHART 2 (GENRE DONUT CHART)
-        # -------------------------------------------------------------------
         c_left, c_right = st.columns([1.3, 1.0], gap="large")
 
         with c_left:
@@ -2427,9 +2453,6 @@ Analyzing 25,000+ PC releases reveals a clear pattern: thousands of player-loved
             )
             st.plotly_chart(fig_donut, use_container_width=True)
 
-        # -------------------------------------------------------------------
-        # ROW 2: CHART 3 (BAR CHART — PRICE TIER VS. PLAYER SATISFACTION)
-        # -------------------------------------------------------------------
         price_df = df_all[(~df_all["is_demo_teaser"]) & (df_all["total_reviews"] >= 100)].copy()
         price_df["Price Tier"] = pd.cut(
             price_df["effective_price_usd"],
@@ -2473,7 +2496,6 @@ Analyzing 25,000+ PC releases reveals a clear pattern: thousands of player-loved
         )
         st.plotly_chart(fig_price, use_container_width=True)
 
-        # Clean 3-Card Key Takeaways Strip
         tk1, tk2, tk3 = st.columns(3, gap="medium")
         with tk1:
             st.markdown(
