@@ -6,7 +6,8 @@ Features:
   - Pre-indexed, cached multi-store filtering & sorting across 25,000+ PC games
   - Compact, streamlined "Explore & Genres" popover panel
   - Tactile mouse hover & click-press micro-interactions on all buttons, pills, and cards
-  - Uncropped Spotlight cover art, centered carousel dots, and uniform 460:215 card framing
+  - Uncropped Spotlight cover art, centered carousel dots, uniform 460:215 card framing,
+    and automatic SVG cover fallback for non-Steam titles with expired/blocked CDN links
   - Isolated Insights & Charts page with honest 0–100% bar scale, leader-line donut,
     de-overplotted scatter, data-synced takeaways, and CSV dataset downloads
 """
@@ -98,6 +99,45 @@ def clean_plain_review(raw: str, max_len: int = 380) -> str:
     if len(cleaned) > max_len:
         cleaned = cleaned[: max_len - 3].rstrip() + "..."
     return cleaned
+
+
+def build_card_img_tag(row: pd.Series, lazy: bool = True) -> str:
+    """Renders game cover art with an instant self-contained SVG fallback if a CDN blocks hotlinking."""
+    g_name = str(row.get("name", "PC Game")).strip() or "PC Game"
+    stores_val = row.get("verified_stores")
+    stores_str = "PC" if pd.isna(stores_val) or not str(stores_val).strip() else str(stores_val).replace("|", " • ")
+
+    safe_title = html.escape(g_name[:26].upper())
+    safe_sub = html.escape(stores_str[:34].upper())
+
+    svg = (
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="460" height="215" viewBox="0 0 460 215">'
+        f'<defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">'
+        f'<stop offset="0%" stop-color="#1e1b4b"/><stop offset="55%" stop-color="#0f172a"/>'
+        f'<stop offset="100%" stop-color="#3b0764"/></linearGradient></defs>'
+        f'<rect width="460" height="215" fill="url(#bg)"/>'
+        f'<circle cx="395" cy="35" r="95" fill="#f43f5e" fill-opacity="0.18"/>'
+        f'<circle cx="65" cy="185" r="110" fill="#3b82f6" fill-opacity="0.18"/>'
+        f'<rect x="18" y="18" width="424" height="179" rx="10" fill="none" stroke="#60a5fa" stroke-opacity="0.24" stroke-width="1.5"/>'
+        f'<text x="230" y="102" text-anchor="middle" fill="#ffffff" '
+        f'font-family="sans-serif" font-size="27" font-weight="800" letter-spacing="2">{safe_title}</text>'
+        f'<text x="230" y="134" text-anchor="middle" fill="#93c5fd" '
+        f'font-family="monospace" font-size="12" font-weight="700" letter-spacing="2">{safe_sub}</text>'
+        f'</svg>'
+    )
+    fallback_uri = "data:image/svg+xml;utf8," + urllib.parse.quote(svg)
+
+    raw_val = row.get("header_image")
+    raw_url = "" if pd.isna(raw_val) else str(raw_val).strip()
+    if raw_url.lower() in ("", "nan", "none", "null"):
+        raw_url = ""
+
+    src_url = html.escape(raw_url) if raw_url else fallback_uri
+    lazy_attr = 'loading="lazy" ' if lazy else ""
+    return (
+        f'<img src="{src_url}" alt="{html.escape(g_name)}" {lazy_attr}'
+        f'onerror="this.onerror=null;this.src=\'{fallback_uri}\';" />'
+    )
 
 
 # ===========================================================================
@@ -196,6 +236,7 @@ BATTLENET_TITLES = (
 )
 
 EPIC_VERIFIED_TITLES = (
+    "valorant",
     "fortnite",
     "alan wake 2",
     "alan wake remastered",
@@ -1826,7 +1867,6 @@ def build_export_datasets(df: pd.DataFrame) -> dict[str, tuple[pd.DataFrame, byt
         (df.loc[clean_full.index, "_strict_non_aaa"]) & (clean_full["wilson_score"] >= 75.0)
     ].reset_index(drop=True)
 
-    # Chart summary table
     price_sub = clean_full[clean_full["total_reviews"] >= 100].copy()
     price_sub["price_tier"] = pd.cut(
         price_sub["effective_price_usd"],
@@ -1874,8 +1914,10 @@ if hasattr(st, "dialog"):
 
         c1, c2 = st.columns([1.15, 1.85], gap="medium")
         with c1:
-            if game_dict.get("header_image"):
-                st.image(game_dict["header_image"], use_container_width=True)
+            st.markdown(
+                f'<div class="card-img-wrap" style="margin-bottom:10px;">{build_card_img_tag(pd.Series(game_dict), lazy=False)}</div>',
+                unsafe_allow_html=True,
+            )
             if live_now is not None:
                 st.markdown(f"**Playing Right Now:** 🟢 {live_now:,} players in-game")
             st.markdown(f"**Release Date:** {game_dict.get('release_date', '—')}")
@@ -1955,7 +1997,7 @@ def render_featured_spotlight_fragment() -> None:
     spot_row = spotlight_pool.iloc[s_idx]
     spot_aid = int(spot_row["appid"])
     spot_name = str(spot_row["name"])
-    img_url = html.escape(str(spot_row.get("header_image", "")))
+    spot_img_html = build_card_img_tag(spot_row, lazy=False)
 
     spot_live_ccu = spot_ccu_map.get(spot_aid)
     live_chip_html = (
@@ -1990,7 +2032,7 @@ def render_featured_spotlight_fragment() -> None:
             f"""
 <div id="spot-card-{s_idx}-{anim_tick}" class="spotlight-unified spot-anim-card">
 <div class="spot-media-col">
-<img src="{img_url}" alt="{html.escape(spot_name)}" />
+{spot_img_html}
 </div>
 <div class="spot-info-col">
 <div class="spot-kicker">{kicker_txt}</div>
@@ -2277,12 +2319,10 @@ def render_catalog_browser_fragment(min_year: int, max_year: int) -> None:
             g_name_esc = html.escape(str(row["name"]))
             with cols[c_i]:
                 with st.container(border=True):
-                    if row["header_image"]:
-                        card_img_esc = html.escape(str(row["header_image"]))
-                        st.markdown(
-                            f'<div class="card-img-wrap"><img src="{card_img_esc}" alt="{g_name_esc}" loading="lazy" /></div>',
-                            unsafe_allow_html=True,
-                        )
+                    st.markdown(
+                        f'<div class="card-img-wrap">{build_card_img_tag(row, lazy=True)}</div>',
+                        unsafe_allow_html=True,
+                    )
 
                     price_html = format_price_badge(row)
                     ccu_html = format_live_players_badge(row, live_ccu_map)
