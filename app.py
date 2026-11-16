@@ -6,8 +6,7 @@ Features:
   - Pre-indexed, cached multi-store filtering & sorting across 25,000+ PC games
   - Compact, streamlined "Explore & Genres" popover panel
   - Tactile mouse hover & click-press micro-interactions on all buttons, pills, and cards
-  - Uncropped Spotlight cover art, centered carousel dots, uniform 460:215 card framing,
-    and automatic SVG cover fallback for non-Steam titles with expired/blocked CDN links
+  - Zero-JS layered CSS cover frames + verified VALORANT media CDN art (zero broken icons)
   - Isolated Insights & Charts page with honest 0–100% bar scale, leader-line donut,
     de-overplotted scatter, data-synced takeaways, and CSV dataset downloads
 """
@@ -101,42 +100,69 @@ def clean_plain_review(raw: str, max_len: int = 380) -> str:
     return cleaned
 
 
-def build_card_img_tag(row: pd.Series, lazy: bool = True) -> str:
-    """Renders game cover art with an instant self-contained SVG fallback if a CDN blocks hotlinking."""
-    g_name = str(row.get("name", "PC Game")).strip() or "PC Game"
-    stores_val = row.get("verified_stores")
-    stores_str = "PC" if pd.isna(stores_val) or not str(stores_val).strip() else str(stores_val).replace("|", " • ")
+# Verified public media URLs for non-Steam PC titles whose launcher CDNs block hotlinking
+NON_STEAM_COVER_OVERRIDES = {
+    "valorant": "https://media.valorant-api.com/maps/7eaecc1b-4337-bbf6-6ab9-04b8f06b3319/splash.png",
+}
 
-    safe_title = html.escape(g_name[:26].upper())
-    safe_sub = html.escape(stores_str[:34].upper())
 
-    svg = (
-        f'<svg xmlns="http://www.w3.org/2000/svg" width="460" height="215" viewBox="0 0 460 215">'
-        f'<defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">'
-        f'<stop offset="0%" stop-color="#1e1b4b"/><stop offset="55%" stop-color="#0f172a"/>'
-        f'<stop offset="100%" stop-color="#3b0764"/></linearGradient></defs>'
-        f'<rect width="460" height="215" fill="url(#bg)"/>'
-        f'<circle cx="395" cy="35" r="95" fill="#f43f5e" fill-opacity="0.18"/>'
-        f'<circle cx="65" cy="185" r="110" fill="#3b82f6" fill-opacity="0.18"/>'
-        f'<rect x="18" y="18" width="424" height="179" rx="10" fill="none" stroke="#60a5fa" stroke-opacity="0.24" stroke-width="1.5"/>'
-        f'<text x="230" y="102" text-anchor="middle" fill="#ffffff" '
-        f'font-family="sans-serif" font-size="27" font-weight="800" letter-spacing="2">{safe_title}</text>'
-        f'<text x="230" y="134" text-anchor="middle" fill="#93c5fd" '
-        f'font-family="monospace" font-size="12" font-weight="700" letter-spacing="2">{safe_sub}</text>'
-        f'</svg>'
-    )
-    fallback_uri = "data:image/svg+xml;utf8," + urllib.parse.quote(svg)
+def resolve_cover_url(row: pd.Series) -> str:
+    nm_key = str(row.get("name", "")).strip().lower()
+    if nm_key in NON_STEAM_COVER_OVERRIDES:
+        return NON_STEAM_COVER_OVERRIDES[nm_key]
 
     raw_val = row.get("header_image")
     raw_url = "" if pd.isna(raw_val) else str(raw_val).strip()
     if raw_url.lower() in ("", "nan", "none", "null"):
-        raw_url = ""
+        return ""
+    return raw_url
 
-    src_url = html.escape(raw_url) if raw_url else fallback_uri
-    lazy_attr = 'loading="lazy" ' if lazy else ""
+
+def render_cover_art(row: pd.Series, variant: str = "card") -> str:
+    """
+    Renders a zero-JS layered cover container:
+      - Bottom layer: Styled HTML/CSS title banner (always visible if an external CDN fails)
+      - Top layer: CSS background-image photo (passes Streamlit DOMPurify cleanly)
+    """
+    g_name = str(row.get("name", "PC Game")).strip() or "PC Game"
+    stores_val = row.get("verified_stores")
+    if pd.isna(stores_val) or not str(stores_val).strip():
+        stores_list = detect_verified_stores(
+            name=g_name,
+            appid=int(row.get("appid", 0) or 0),
+            publishers=str(row.get("publishers", "")),
+            developers=str(row.get("developers", "")),
+        )
+        stores_str = " • ".join(stores_list)
+    else:
+        stores_str = str(stores_val).replace("|", " • ")
+
+    img_url = resolve_cover_url(row)
+    bg_size = "contain" if variant == "spot" else "cover"
+    photo_layer = (
+        f'<div class="cover-photo-layer" style="background-image: url(\'{html.escape(img_url)}\'); background-size: {bg_size};"></div>'
+        if img_url
+        else ""
+    )
+
+    if variant == "spot":
+        wrap_cls = "spot-media-col"
+        extra_style = ""
+    elif variant == "modal":
+        wrap_cls = "card-img-wrap"
+        extra_style = ' style="margin-bottom: 10px;"'
+    else:
+        wrap_cls = "card-img-wrap"
+        extra_style = ""
+
     return (
-        f'<img src="{src_url}" alt="{html.escape(g_name)}" {lazy_attr}'
-        f'onerror="this.onerror=null;this.src=\'{fallback_uri}\';" />'
+        f'<div class="{wrap_cls}"{extra_style}>'
+        f'<div class="cover-fallback-art">'
+        f'<div class="cfb-title">{html.escape(g_name[:30].upper())}</div>'
+        f'<div class="cfb-sub">{html.escape(stores_str[:36].upper())}</div>'
+        f'</div>'
+        f'{photo_layer}'
+        f'</div>'
     )
 
 
@@ -853,6 +879,51 @@ span[data-baseweb="tag"] {
     font-weight: 700;
 }
 
+/* Layered Zero-JS Cover Frame (Fallback Gradient Card + Photo Overlay) */
+.cover-fallback-art {
+    position: absolute;
+    inset: 0;
+    background:
+        radial-gradient(circle at 85% 20%, rgba(244, 63, 94, 0.28), transparent 48%),
+        radial-gradient(circle at 15% 85%, rgba(59, 130, 246, 0.30), transparent 52%),
+        linear-gradient(135deg, #1e1b4b 0%, #0f172a 55%, #311042 100%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 14px;
+    text-align: center;
+    z-index: 1;
+}
+.cfb-title {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-size: 1.25rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    color: #ffffff;
+    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.55);
+    line-height: 1.2;
+}
+.cfb-sub {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    color: #93c5fd;
+    margin-top: 6px;
+    padding: 2px 9px;
+    border-radius: 999px;
+    background: rgba(15, 23, 42, 0.65);
+    border: 1px solid rgba(96, 165, 250, 0.32);
+}
+.cover-photo-layer {
+    position: absolute;
+    inset: 0;
+    background-position: center center;
+    background-repeat: no-repeat;
+    z-index: 2;
+}
+
 /* Fixed-Height Atomic Spotlight Card — Uncropped Cover Art */
 .spotlight-unified {
     background: linear-gradient(135deg, #111b33 0%, #1a1638 55%, #0f2238 100%);
@@ -868,6 +939,7 @@ span[data-baseweb="tag"] {
     align-items: center;
 }
 .spot-media-col {
+    position: relative;
     flex: 0 0 424px;
     width: 424px;
     height: 204px;
@@ -876,15 +948,6 @@ span[data-baseweb="tag"] {
     border: 1px solid rgba(255, 255, 255, 0.14);
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
     overflow: hidden;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-.spot-media-col img {
-    width: 100%;
-    height: 100%;
-    object-fit: contain;
-    display: block;
 }
 .spot-info-col {
     flex: 1 1 auto;
@@ -1065,6 +1128,7 @@ div[data-testid="stVerticalBlockBorderWrapper"]:hover {
     box-shadow: 0 12px 28px rgba(37, 99, 235, 0.18) !important;
 }
 .card-img-wrap {
+    position: relative;
     width: 100%;
     aspect-ratio: 460 / 215;
     background: #080d1a;
@@ -1072,13 +1136,6 @@ div[data-testid="stVerticalBlockBorderWrapper"]:hover {
     overflow: hidden;
     border: 1px solid rgba(255, 255, 255, 0.08);
     margin-bottom: 4px;
-}
-.card-img-wrap img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    object-position: center center;
-    display: block;
 }
 
 .card-top-row {
@@ -1914,10 +1971,7 @@ if hasattr(st, "dialog"):
 
         c1, c2 = st.columns([1.15, 1.85], gap="medium")
         with c1:
-            st.markdown(
-                f'<div class="card-img-wrap" style="margin-bottom:10px;">{build_card_img_tag(pd.Series(game_dict), lazy=False)}</div>',
-                unsafe_allow_html=True,
-            )
+            st.markdown(render_cover_art(pd.Series(game_dict), variant="modal"), unsafe_allow_html=True)
             if live_now is not None:
                 st.markdown(f"**Playing Right Now:** 🟢 {live_now:,} players in-game")
             st.markdown(f"**Release Date:** {game_dict.get('release_date', '—')}")
@@ -1997,7 +2051,7 @@ def render_featured_spotlight_fragment() -> None:
     spot_row = spotlight_pool.iloc[s_idx]
     spot_aid = int(spot_row["appid"])
     spot_name = str(spot_row["name"])
-    spot_img_html = build_card_img_tag(spot_row, lazy=False)
+    spot_media_html = render_cover_art(spot_row, variant="spot")
 
     spot_live_ccu = spot_ccu_map.get(spot_aid)
     live_chip_html = (
@@ -2031,9 +2085,7 @@ def render_featured_spotlight_fragment() -> None:
         st.markdown(
             f"""
 <div id="spot-card-{s_idx}-{anim_tick}" class="spotlight-unified spot-anim-card">
-<div class="spot-media-col">
-{spot_img_html}
-</div>
+{spot_media_html}
 <div class="spot-info-col">
 <div class="spot-kicker">{kicker_txt}</div>
 <div class="spot-title">{html.escape(spot_name)}</div>
@@ -2319,10 +2371,7 @@ def render_catalog_browser_fragment(min_year: int, max_year: int) -> None:
             g_name_esc = html.escape(str(row["name"]))
             with cols[c_i]:
                 with st.container(border=True):
-                    st.markdown(
-                        f'<div class="card-img-wrap">{build_card_img_tag(row, lazy=True)}</div>',
-                        unsafe_allow_html=True,
-                    )
+                    st.markdown(render_cover_art(row, variant="card"), unsafe_allow_html=True)
 
                     price_html = format_price_badge(row)
                     ccu_html = format_live_players_badge(row, live_ccu_map)
