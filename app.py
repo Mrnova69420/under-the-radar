@@ -5,9 +5,10 @@ Features:
   - Strict, accurate launcher verification (Steam, Epic, GOG, EA App, Ubisoft, Riot, Battle.net) — zero false tags
   - Live concurrent player counts ("● X playing now") fetched in parallel for every game on screen
   - Strict "Hide AAA Blockbusters" filter blocking mega-franchises (GTA, Elden Ring, Street Fighter, etc.)
-  - Spacious Featured Spotlight at top with locked-position ◀ and ▶ buttons & non-colliding controls
-  - Uncrowded 1-Row Command Bar with a wide 3-Column "Explore & Genres ▾" Mega-Menu Panel
-  - Clean, isolated Insights & Charts page with Gem Score methodology breakdown + 3 chart types (Bubble Scatter, Donut, Bar)
+  - Spacious Featured Spotlight at top with uncropped object-fit:contain art & centered carousel dots
+  - Uncrowded 1-Row Command Bar with a wide 3-Column "Explore & Genres" Mega-Menu Panel
+  - Unified status/filter bar and uniform 460:215 card image framing across the grid
+  - Clean, isolated Insights & Charts page with Gem Score methodology breakdown + 3 chart types
 """
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -602,12 +603,13 @@ header[data-testid="stHeader"] {
         #060a13;
     color: #f1f5f9;
 }
-.block-container {
+.block-container,
+div[data-testid="stMainBlockContainer"] {
     max-width: 1400px !important;
     margin: 0 auto !important;
     padding-left: 1.5rem !important;
     padding-right: 1.5rem !important;
-    padding-top: 0.85rem !important;
+    padding-top: 2.4rem !important;
     padding-bottom: 2.5rem !important;
 }
 
@@ -631,7 +633,7 @@ div.stButton > button {
     height: 42px !important;
     border-radius: 10px !important;
     font-family: 'Inter', sans-serif !important;
-    font-size: 0.83rem !important;
+    font-size: 0.84rem !important;
     font-weight: 600 !important;
     letter-spacing: -0.01em !important;
     transition: all 0.18s cubic-bezier(0.22, 1, 0.36, 1) !important;
@@ -657,9 +659,9 @@ div[data-testid="stPopover"] > button {
     height: 42px !important;
     background: rgba(24, 34, 58, 0.88) !important;
     border: 1px solid rgba(99, 125, 175, 0.34) !important;
-    color: #dbeafe !important;
+    color: #e2e8f0 !important;
     border-radius: 10px !important;
-    font-size: 0.83rem !important;
+    font-size: 0.84rem !important;
     font-weight: 600 !important;
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06) !important;
     transition: all 0.18s ease !important;
@@ -688,18 +690,18 @@ div[data-testid="stPopoverBody"] {
 }
 .mega-col-title {
     font-family: 'Plus Jakarta Sans', sans-serif;
-    font-size: 0.75rem;
+    font-size: 0.78rem;
     font-weight: 800;
-    letter-spacing: 0.09em;
+    letter-spacing: 0.08em;
     text-transform: uppercase;
-    color: #60a5fa;
+    color: #93c5fd;
     margin-bottom: 10px;
     padding-bottom: 6px;
-    border-bottom: 1px solid rgba(99, 125, 175, 0.24);
+    border-bottom: 1px solid rgba(99, 125, 175, 0.26);
 }
 .mega-sub-note {
-    font-size: 0.76rem;
-    color: #94a3b8;
+    font-size: 0.8rem;
+    color: #cbd5e1;
     margin: 6px 0 8px 0;
 }
 
@@ -713,7 +715,7 @@ div[data-baseweb="input"] > div {
     color: #f8fafc !important;
 }
 div[data-baseweb="input"] input {
-    font-size: 0.89rem !important;
+    font-size: 0.9rem !important;
 }
 div[data-baseweb="select"] > div {
     background: #0f172a !important;
@@ -728,19 +730,20 @@ div[data-baseweb="select"] > div:focus-within {
     box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.22) !important;
 }
 span[data-baseweb="tag"] {
-    background: rgba(37, 99, 235, 0.30) !important;
-    border: 1px solid rgba(96, 165, 250, 0.50) !important;
-    color: #e0f2fe !important;
+    background: rgba(37, 99, 235, 0.32) !important;
+    border: 1px solid rgba(96, 165, 250, 0.55) !important;
+    color: #f0f9ff !important;
     border-radius: 6px !important;
 }
 
-/* Top Brand Bar */
+/* Top Brand Bar — Generous Breathing Room */
 .top-brand-strip {
     background: linear-gradient(125deg, #0f172a 0%, #191636 55%, #0d2137 100%);
-    border: 1px solid rgba(99, 125, 175, 0.28);
+    border: 1px solid rgba(99, 125, 175, 0.32);
     border-radius: 16px;
-    padding: 13px 22px;
-    margin-bottom: 12px;
+    padding: 15px 22px;
+    margin-top: 4px;
+    margin-bottom: 14px;
     display: flex;
     flex-wrap: wrap;
     justify-content: space-between;
@@ -770,34 +773,34 @@ span[data-baseweb="tag"] {
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     margin: 0;
-    line-height: 1.1;
+    line-height: 1.15;
 }
 .radar-sub {
     color: #cbd5e1;
-    font-size: 0.8rem;
-    margin: 2px 0 0 0;
+    font-size: 0.82rem;
+    margin: 3px 0 0 0;
 }
 .epic-gift-pill {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    background: rgba(245, 158, 11, 0.16);
-    border: 1px solid rgba(251, 191, 36, 0.42);
-    color: #fde68a;
-    padding: 5px 13px;
+    background: rgba(245, 158, 11, 0.18);
+    border: 1px solid rgba(251, 191, 36, 0.48);
+    color: #fef3c7;
+    padding: 6px 14px;
     border-radius: 999px;
-    font-size: 0.77rem;
+    font-size: 0.8rem;
     font-weight: 700;
 }
 
-/* Fixed-Height Atomic Spotlight Card */
+/* Fixed-Height Atomic Spotlight Card — Uncropped Cover Art */
 .spotlight-unified {
     background: linear-gradient(135deg, #111b33 0%, #1a1638 55%, #0f2238 100%);
     border: 1px solid rgba(96, 165, 250, 0.36);
     border-radius: 18px;
     padding: 20px 24px;
-    height: 312px;
-    margin-bottom: 14px;
+    height: 318px;
+    margin-bottom: 12px;
     overflow: hidden;
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 16px 38px rgba(0, 0, 0, 0.48);
     display: flex;
@@ -805,16 +808,22 @@ span[data-baseweb="tag"] {
     align-items: center;
 }
 .spot-media-col {
-    flex: 0 0 396px;
-    width: 396px;
-}
-.spot-media-col img {
-    width: 100%;
-    height: 224px;
-    object-fit: cover;
+    flex: 0 0 424px;
+    width: 424px;
+    height: 204px;
+    background: #080d1a;
     border-radius: 12px;
     border: 1px solid rgba(255, 255, 255, 0.14);
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.spot-media-col img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
     display: block;
 }
 .spot-info-col {
@@ -822,11 +831,11 @@ span[data-baseweb="tag"] {
     min-width: 0;
 }
 .spot-kicker {
-    font-size: 0.72rem;
+    font-size: 0.74rem;
     font-weight: 800;
     text-transform: uppercase;
     letter-spacing: 0.09em;
-    color: #60a5fa;
+    color: #93c5fd;
     margin-bottom: 4px;
 }
 .spot-title {
@@ -851,45 +860,45 @@ span[data-baseweb="tag"] {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    background: rgba(16, 185, 129, 0.18);
-    border: 1px solid rgba(52, 211, 153, 0.45);
-    color: #6ee7b7;
+    background: rgba(16, 185, 129, 0.2);
+    border: 1px solid rgba(52, 211, 153, 0.5);
+    color: #a7f3d0;
     font-family: 'JetBrains Mono', monospace;
-    font-size: 0.74rem;
+    font-size: 0.77rem;
     font-weight: 700;
-    padding: 3px 9px;
+    padding: 3px 10px;
     border-radius: 7px;
 }
 .stat-chip-score {
-    background: rgba(59, 130, 246, 0.2);
-    border: 1px solid rgba(96, 165, 250, 0.45);
-    color: #93c5fd;
+    background: rgba(59, 130, 246, 0.22);
+    border: 1px solid rgba(96, 165, 250, 0.5);
+    color: #bfdbfe;
     font-family: 'JetBrains Mono', monospace;
-    font-size: 0.74rem;
+    font-size: 0.77rem;
     font-weight: 700;
-    padding: 3px 9px;
+    padding: 3px 10px;
     border-radius: 7px;
 }
 .stat-chip-rating {
-    background: rgba(245, 158, 11, 0.18);
-    border: 1px solid rgba(251, 191, 36, 0.45);
-    color: #fde047;
-    font-size: 0.74rem;
+    background: rgba(245, 158, 11, 0.2);
+    border: 1px solid rgba(251, 191, 36, 0.5);
+    color: #fef08a;
+    font-size: 0.77rem;
     font-weight: 700;
-    padding: 3px 9px;
+    padding: 3px 10px;
     border-radius: 7px;
 }
 .stat-chip-shadow {
-    background: rgba(139, 92, 246, 0.2);
-    border: 1px solid rgba(167, 139, 250, 0.42);
-    color: #ddd6fe;
-    font-size: 0.74rem;
+    background: rgba(139, 92, 246, 0.22);
+    border: 1px solid rgba(167, 139, 250, 0.48);
+    color: #ede9fe;
+    font-size: 0.77rem;
     font-weight: 600;
-    padding: 3px 9px;
+    padding: 3px 10px;
     border-radius: 7px;
 }
 .spot-desc {
-    font-size: 0.85rem;
+    font-size: 0.87rem;
     color: #e2e8f0;
     line-height: 1.45;
     margin: 7px 0 8px 0;
@@ -899,59 +908,91 @@ span[data-baseweb="tag"] {
     overflow: hidden;
 }
 .spot-insight {
-    background: rgba(11, 17, 32, 0.72);
+    background: rgba(11, 17, 32, 0.78);
     border-left: 3px solid #3b82f6;
     padding: 7px 12px;
     border-radius: 8px;
-    font-size: 0.79rem;
-    color: #dbeafe;
+    font-size: 0.81rem;
+    color: #e0f2fe;
     margin-bottom: 8px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
 }
 .carousel-dots {
-    text-align: center;
-    letter-spacing: 6px;
-    font-size: 0.88rem;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 42px;
+    letter-spacing: 7px;
+    font-size: 0.92rem;
     color: #60a5fa;
-    padding-top: 8px;
 }
 
 /* Single Breathable Command Bar Divider */
 .command-bar-divider {
-    margin-top: 18px;
-    padding-top: 18px;
-    border-top: 1px solid rgba(99, 125, 175, 0.22);
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid rgba(99, 125, 175, 0.24);
 }
 
-.active-filter-strip {
-    background: rgba(37, 99, 235, 0.14);
-    border: 1px solid rgba(96, 165, 250, 0.35);
+/* Concise Single-Line AAA Banner */
+.aaa-mode-banner {
+    background: linear-gradient(90deg, rgba(16, 185, 129, 0.16) 0%, rgba(59, 130, 246, 0.14) 100%);
+    border: 1px solid rgba(52, 211, 153, 0.42);
     border-radius: 10px;
     padding: 8px 14px;
-    margin-top: 8px;
-    font-size: 0.81rem;
-    color: #dbeafe;
-}
-
-.aaa-mode-banner {
-    background: linear-gradient(90deg, rgba(16, 185, 129, 0.16) 0%, rgba(59, 130, 246, 0.16) 100%);
-    border: 1px solid rgba(52, 211, 153, 0.42);
-    border-radius: 11px;
-    padding: 9px 15px;
-    margin: 10px 0 12px 0;
-    font-size: 0.82rem;
+    margin: 10px 0 6px 0;
+    font-size: 0.85rem;
     color: #ecfdf5;
     display: flex;
+    flex-wrap: wrap;
     justify-content: space-between;
     align-items: center;
+    gap: 8px;
+}
+.aaa-banner-hint {
+    color: #a7f3d0;
+    font-weight: 600;
 }
 
-/* Game Cards */
+/* Unified Results + Active Filter Chips Row */
+.unified-status-bar {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.88rem;
+    color: #e2e8f0;
+    margin: 10px 0 12px 0;
+    padding: 6px 4px;
+}
+.unified-status-bar strong {
+    color: #ffffff;
+}
+.status-left-group {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+.filter-chip-pill {
+    display: inline-flex;
+    align-items: center;
+    background: rgba(37, 99, 235, 0.24);
+    border: 1px solid rgba(96, 165, 250, 0.52);
+    color: #f0f9ff;
+    font-size: 0.8rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 999px;
+}
+
+/* Game Cards + Consistent 460:215 Image Frame */
 div[data-testid="stVerticalBlockBorderWrapper"] {
     background: linear-gradient(175deg, #10182b 0%, #0b1120 100%) !important;
-    border: 1px solid rgba(99, 125, 175, 0.22) !important;
+    border: 1px solid rgba(99, 125, 175, 0.24) !important;
     border-radius: 16px !important;
     padding: 14px !important;
     margin-bottom: 14px !important;
@@ -961,6 +1002,22 @@ div[data-testid="stVerticalBlockBorderWrapper"] {
 div[data-testid="stVerticalBlockBorderWrapper"]:hover {
     border-color: rgba(96, 165, 250, 0.65) !important;
     transform: translateY(-2px) !important;
+}
+.card-img-wrap {
+    width: 100%;
+    aspect-ratio: 460 / 215;
+    background: #080d1a;
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    margin-bottom: 4px;
+}
+.card-img-wrap img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center center;
+    display: block;
 }
 
 .card-top-row {
@@ -972,14 +1029,14 @@ div[data-testid="stVerticalBlockBorderWrapper"]:hover {
 }
 .card-title {
     font-family: 'Plus Jakarta Sans', sans-serif;
-    font-size: 1.05rem;
+    font-size: 1.06rem;
     font-weight: 700;
     color: #ffffff;
     margin: 2px 0 3px 0;
     line-height: 1.25;
 }
 .card-meta {
-    font-size: 0.76rem;
+    font-size: 0.79rem;
     color: #cbd5e1;
     margin-bottom: 7px;
 }
@@ -988,7 +1045,7 @@ div[data-testid="stVerticalBlockBorderWrapper"]:hover {
     font-weight: 700;
 }
 .card-desc {
-    font-size: 0.81rem;
+    font-size: 0.83rem;
     color: #cbd5e1;
     line-height: 1.44;
     margin-bottom: 9px;
@@ -999,7 +1056,7 @@ div[data-testid="stVerticalBlockBorderWrapper"]:hover {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    font-size: 0.74rem;
+    font-size: 0.77rem;
     font-weight: 700;
     color: #6ee7b7;
 }
@@ -1015,9 +1072,9 @@ div[data-testid="stVerticalBlockBorderWrapper"]:hover {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    font-size: 0.73rem;
+    font-size: 0.76rem;
     font-weight: 600;
-    color: #94a3b8;
+    color: #cbd5e1;
 }
 .live-dot-dim {
     width: 7px;
@@ -1030,10 +1087,10 @@ div[data-testid="stVerticalBlockBorderWrapper"]:hover {
 .price-tag {
     display: inline-block;
     background: #172138;
-    border: 1px solid rgba(99, 125, 175, 0.32);
+    border: 1px solid rgba(99, 125, 175, 0.36);
     color: #f8fafc;
     font-family: 'JetBrains Mono', monospace;
-    font-size: 0.74rem;
+    font-size: 0.77rem;
     font-weight: 700;
     padding: 2px 9px;
     border-radius: 6px;
@@ -1041,69 +1098,70 @@ div[data-testid="stVerticalBlockBorderWrapper"]:hover {
 .sale-tag {
     display: inline-block;
     background: rgba(16, 185, 129, 0.22);
-    border: 1px solid rgba(52, 211, 153, 0.52);
-    color: #6ee7b7;
+    border: 1px solid rgba(52, 211, 153, 0.55);
+    color: #a7f3d0;
     font-family: 'JetBrains Mono', monospace;
-    font-size: 0.74rem;
+    font-size: 0.77rem;
     font-weight: 700;
     padding: 2px 9px;
     border-radius: 6px;
 }
 .aaa-pill-sm {
     display: inline-block;
-    background: rgba(244, 63, 94, 0.18);
-    border: 1px solid rgba(251, 113, 133, 0.42);
-    color: #fda4af;
-    font-size: 0.68rem;
+    background: rgba(244, 63, 94, 0.24);
+    border: 1px solid rgba(251, 113, 133, 0.52);
+    color: #fecdd3;
+    font-size: 0.74rem;
     font-weight: 700;
-    padding: 1px 7px;
+    padding: 2px 8px;
     border-radius: 5px;
-    margin-right: 4px;
+    margin-right: 5px;
 }
 .store-badge {
     display: inline-block;
-    background: rgba(59, 130, 246, 0.12);
-    color: #bfdbfe;
-    border: 1px solid rgba(96, 165, 250, 0.26);
-    padding: 2px 8px;
+    background: rgba(37, 99, 235, 0.22);
+    color: #e0f2fe;
+    border: 1px solid rgba(96, 165, 250, 0.42);
+    padding: 3px 10px;
     border-radius: 6px;
-    font-size: 0.69rem;
+    font-size: 0.77rem;
     font-weight: 600;
-    margin-right: 4px;
+    margin-right: 5px;
     margin-bottom: 4px;
 }
 .tag-pill {
     display: inline-block;
-    background: rgba(139, 92, 246, 0.14);
-    color: #ddd6fe;
-    border: 1px solid rgba(167, 139, 250, 0.26);
-    padding: 2px 8px;
+    background: rgba(124, 58, 237, 0.22);
+    color: #ede9fe;
+    border: 1px solid rgba(167, 139, 250, 0.40);
+    padding: 3px 10px;
     border-radius: 6px;
-    font-size: 0.7rem;
-    margin-right: 4px;
+    font-size: 0.77rem;
+    font-weight: 500;
+    margin-right: 5px;
     margin-bottom: 4px;
 }
 .store-links-row {
     display: flex;
     flex-wrap: wrap;
-    gap: 5px;
-    margin: 5px 0 9px 0;
+    gap: 6px;
+    margin: 6px 0 9px 0;
 }
 .store-link-btn {
     display: inline-block;
-    background: rgba(30, 41, 66, 0.85);
-    border: 1px solid rgba(99, 125, 175, 0.3);
-    color: #cbd5e1 !important;
+    background: rgba(30, 41, 66, 0.92);
+    border: 1px solid rgba(99, 125, 175, 0.38);
+    color: #e2e8f0 !important;
     text-decoration: none !important;
     font-weight: 600;
-    font-size: 0.72rem;
-    padding: 3px 9px;
+    font-size: 0.76rem;
+    padding: 3px 10px;
     border-radius: 6px;
     transition: all 0.15s ease;
 }
 .store-link-btn:hover {
     border-color: #60a5fa;
-    background: rgba(37, 99, 235, 0.22);
+    background: rgba(37, 99, 235, 0.28);
     color: #ffffff !important;
 }
 
@@ -1274,19 +1332,6 @@ div[data-testid="stVerticalBlockBorderWrapper"]:hover {
     line-height: 1.5;
 }
 
-.results-summary {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: space-between;
-    align-items: center;
-    font-size: 0.83rem;
-    color: #cbd5e1;
-    margin: 10px 0 12px 0;
-    padding: 6px 4px;
-}
-.results-summary strong {
-    color: #ffffff;
-}
 .review-quote {
     background: #101c2e;
     border: 1px solid rgba(52, 211, 153, 0.28);
@@ -1294,7 +1339,7 @@ div[data-testid="stVerticalBlockBorderWrapper"]:hover {
     border-radius: 11px;
     padding: 11px 14px;
     margin-bottom: 9px;
-    font-size: 0.83rem;
+    font-size: 0.84rem;
     color: #f1f5f9;
     line-height: 1.5;
 }
@@ -1305,7 +1350,7 @@ div[data-testid="stVerticalBlockBorderWrapper"]:hover {
     border-radius: 11px;
     padding: 11px 14px;
     margin-bottom: 9px;
-    font-size: 0.83rem;
+    font-size: 0.84rem;
     color: #f1f5f9;
     line-height: 1.5;
 }
@@ -1716,7 +1761,7 @@ with page_slot.container():
             st.session_state["year_range"] = (min_year, max_year)
 
         # -------------------------------------------------------------------
-        # 1. FEATURED SPOTLIGHT AT THE TOP (LOCKED ◀ / ▶ + ZERO COLLISION)
+        # 1. FEATURED SPOTLIGHT AT THE TOP (UNCROPPED ART + CENTERED DOTS)
         # -------------------------------------------------------------------
         spotlight_base = df_all[~df_all["is_demo_teaser"]].copy()
         if st.session_state["hide_aaa"]:
@@ -1766,7 +1811,7 @@ with page_slot.container():
         col_left, col_card, col_right = st.columns([0.055, 0.89, 0.055], gap="small")
 
         with col_left:
-            st.markdown("<div style='height: 135px;'></div>", unsafe_allow_html=True)
+            st.markdown("<div style='height: 138px;'></div>", unsafe_allow_html=True)
             if st.button("◀", key="spot_left_btn", use_container_width=True):
                 st.session_state["spotlight_idx"] = (s_idx - 1) % len(spotlight_pool)
                 st.session_state["spot_anim_tick"] = anim_tick + 1
@@ -1800,30 +1845,30 @@ with page_slot.container():
             )
 
         with col_right:
-            st.markdown("<div style='height: 135px;'></div>", unsafe_allow_html=True)
+            st.markdown("<div style='height: 138px;'></div>", unsafe_allow_html=True)
             if st.button("▶", key="spot_right_btn", use_container_width=True):
                 st.session_state["spotlight_idx"] = (s_idx + 1) % len(spotlight_pool)
                 st.session_state["spot_anim_tick"] = anim_tick + 1
                 st.rerun()
 
-        st.markdown("<div style='height: 8px;'></div>", unsafe_allow_html=True)
-        sp_f1, sp_f2, sp_f3 = st.columns([2.2, 0.9, 1.1], gap="small")
-        with sp_f1:
-            dots_str = " ".join(["●" if i == s_idx else "○" for i in range(len(spotlight_pool))])
-            st.markdown(f'<div class="carousel-dots">{dots_str}</div>', unsafe_allow_html=True)
-        with sp_f2:
+        # Balanced Spotlight Footer: Left Button | Centered Dots | Right CTA
+        sp_pad_l, sp_shuf, sp_dots, sp_cta, sp_pad_r = st.columns([0.055, 0.22, 0.45, 0.22, 0.055], gap="small")
+        with sp_shuf:
             if st.button("↻ Shuffle Featured", key="spot_shuf_btn", use_container_width=True):
                 st.session_state["spotlight_seed"] = random.randint(1, 999999)
                 st.session_state["spotlight_idx"] = 0
                 st.session_state["spot_anim_tick"] = anim_tick + 1
                 st.rerun()
-        with sp_f3:
+        with sp_dots:
+            dots_str = " ".join(["●" if i == s_idx else "○" for i in range(len(spotlight_pool))])
+            st.markdown(f'<div class="carousel-dots">{dots_str}</div>', unsafe_allow_html=True)
+        with sp_cta:
             if st.button("View Details & Prices", key=f"spot_dd_{spot_aid}_{s_idx}", type="primary", use_container_width=True):
                 trigger_deep_dive(spot_row.to_dict())
                 st.rerun()
 
         # -------------------------------------------------------------------
-        # 2. CLEAN 1-ROW COMMAND BAR + 3-COLUMN "EXPLORE & GENRES ▾" MEGA-PANEL
+        # 2. CLEAN 1-ROW COMMAND BAR + 3-COLUMN "EXPLORE & GENRES" MEGA-PANEL
         # -------------------------------------------------------------------
         st.markdown('<div class="command-bar-divider"></div>', unsafe_allow_html=True)
 
@@ -1971,24 +2016,6 @@ with page_slot.container():
         with cb_sort:
             sort_by = st.selectbox("Sort", options=sort_options, index=0, label_visibility="collapsed")
 
-        # Slim Active Filter Strip (Only Appears When Filters Are Active)
-        if active_filter_badges:
-            af_c1, af_c2 = st.columns([4.4, 0.8], gap="small")
-            with af_c1:
-                badges_joined = "  •  ".join([f"<strong>{html.escape(b)}</strong>" for b in active_filter_badges])
-                st.markdown(
-                    f'<div class="active-filter-strip">Active Filters: {badges_joined}</div>',
-                    unsafe_allow_html=True,
-                )
-            with af_c2:
-                st.button(
-                    "✕ Clear",
-                    key="clear_active_strip_btn",
-                    on_click=_reset_all_filters,
-                    args=(min_year, max_year),
-                    use_container_width=True,
-                )
-
         # Filter Catalog
         yr_low, yr_high = st.session_state["year_range"]
         min_w = int(st.session_state["min_wilson"])
@@ -2052,20 +2079,21 @@ with page_slot.container():
                 )
                 filtered = filtered.sort_values("_all_rank", ascending=False)
 
+        # Concise Single-Line AAA Banner (Only Shown When Toggle Is Active)
         if st.session_state["hide_aaa"]:
             overshadowed_n = int((filtered["aaa_shadow_score"] >= 35.0).sum())
             st.markdown(
                 f"""
 <div class="aaa-mode-banner">
-<span><strong>AAA Blockbusters &amp; Mega-Franchises Blocked:</strong> Showing <strong>{len(filtered):,}</strong> indie &amp; AA games — with <strong>{overshadowed_n:,} overshadowed hidden gems</strong> boosted to the top.</span>
-<span>Click <strong>AAA Hidden</strong> above to show all games</span>
+<span>🛡️ <strong>AAA Blockbusters Hidden</strong> — Showing <strong>{len(filtered):,}</strong> indie &amp; AA games (<strong>{overshadowed_n:,} overshadowed gems</strong> boosted).</span>
+<span class="aaa-banner-hint">Turn off AAA Hidden to see everything</span>
 </div>
 """,
                 unsafe_allow_html=True,
             )
 
         # -------------------------------------------------------------------
-        # 3. PAGINATED GAMES GRID WITH LIVE "PLAYING NOW" COUNTS FOR ALL CARDS
+        # 3. PAGINATED GAMES GRID WITH UNIFIED STATUS/FILTER BAR & UNIFORM ART
         # -------------------------------------------------------------------
         if filtered.empty:
             st.info("No games match your current search or filters. Open **Explore & Genres** and click **Reset All Filters**.")
@@ -2079,17 +2107,44 @@ with page_slot.container():
             start_idx = curr_page * page_size
             end_idx = min(start_idx + page_size, total_matching)
 
-            mode_label = "Indie & AA Hidden Gems" if st.session_state["hide_aaa"] else "All PC Games"
-            scope_label = " + ".join(selected_tags) if selected_tags else st.session_state["radar_view"]
-            st.markdown(
-                f"""
-<div class="results-summary">
-<span>Showing <strong>{start_idx + 1}–{end_idx}</strong> of <strong>{total_matching:,} games</strong> ({mode_label} • {html.escape(scope_label)})</span>
+            mode_label = "Indie & AA Gems" if st.session_state["hide_aaa"] else "All PC Games"
+            chips_html = "".join([f'<span class="filter-chip-pill">{html.escape(b)}</span>' for b in active_filter_badges])
+
+            if active_filter_badges:
+                st_left, st_clear = st.columns([5.2, 0.75], gap="small")
+                with st_left:
+                    st.markdown(
+                        f"""
+<div class="unified-status-bar">
+<div class="status-left-group">
+<span>Showing <strong>{start_idx + 1}–{end_idx}</strong> of <strong>{total_matching:,}</strong> ({mode_label})</span>
+{chips_html}
+</div>
 <span>Page <strong>{curr_page + 1}</strong> of <strong>{total_pages:,}</strong></span>
 </div>
 """,
-                unsafe_allow_html=True,
-            )
+                        unsafe_allow_html=True,
+                    )
+                with st_clear:
+                    st.button(
+                        "✕ Clear",
+                        key="clear_active_strip_btn",
+                        on_click=_reset_all_filters,
+                        args=(min_year, max_year),
+                        use_container_width=True,
+                    )
+            else:
+                st.markdown(
+                    f"""
+<div class="unified-status-bar">
+<div class="status-left-group">
+<span>Showing <strong>{start_idx + 1}–{end_idx}</strong> of <strong>{total_matching:,} games</strong> ({mode_label})</span>
+</div>
+<span>Page <strong>{curr_page + 1}</strong> of <strong>{total_pages:,}</strong></span>
+</div>
+""",
+                    unsafe_allow_html=True,
+                )
 
             page_slice = filtered.iloc[start_idx:end_idx].reset_index(drop=True)
             live_ccu_map = get_live_ccu_for_appids(page_slice["appid"].tolist())
@@ -2101,10 +2156,15 @@ with page_slot.container():
                         break
                     row = page_slice.iloc[r_start + c_i]
                     aid = int(row["appid"])
+                    g_name_esc = html.escape(str(row["name"]))
                     with cols[c_i]:
                         with st.container(border=True):
                             if row["header_image"]:
-                                st.image(row["header_image"], use_container_width=True)
+                                card_img_esc = html.escape(str(row["header_image"]))
+                                st.markdown(
+                                    f'<div class="card-img-wrap"><img src="{card_img_esc}" alt="{g_name_esc}" loading="lazy" /></div>',
+                                    unsafe_allow_html=True,
+                                )
 
                             price_html = format_price_badge(row)
                             ccu_html = format_live_players_badge(row, live_ccu_map)
@@ -2112,7 +2172,7 @@ with page_slot.container():
                                 f'<div class="card-top-row">{ccu_html}{price_html}</div>',
                                 unsafe_allow_html=True,
                             )
-                            st.markdown(f'<div class="card-title">{html.escape(str(row["name"]))}</div>', unsafe_allow_html=True)
+                            st.markdown(f'<div class="card-title">{g_name_esc}</div>', unsafe_allow_html=True)
                             st.markdown(
                                 f'<div class="card-meta">{row["release_date"]} • <span class="star-gold">★ {row["wilson_score"]:.1f}%</span> ({int(row["total_reviews"]):,} reviews)</div>',
                                 unsafe_allow_html=True,
