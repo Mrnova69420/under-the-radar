@@ -6,7 +6,8 @@ Features:
   - Pre-indexed, cached multi-store filtering & sorting across 25,000+ PC games
   - Compact, streamlined "Explore & Genres" popover panel
   - Tactile mouse hover & click-press micro-interactions on all buttons, pills, and cards
-  - Zero-JS layered CSS cover frames + verified VALORANT media CDN art (zero broken icons)
+  - Live official key-art resolver for non-Steam titles (VALORANT, LoL, Fortnite, WoW,
+    Alan Wake 2, Genshin Impact, Overwatch 2) + multi-CDN CSS fallbacks (zero black screens)
   - Isolated Insights & Charts page with honest 0–100% bar scale, leader-line donut,
     de-overplotted scatter, data-synced takeaways, and CSV dataset downloads
 """
@@ -100,29 +101,119 @@ def clean_plain_review(raw: str, max_len: int = 380) -> str:
     return cleaned
 
 
-# Verified public media URLs for non-Steam PC titles whose launcher CDNs block hotlinking
-NON_STEAM_COVER_OVERRIDES = {
-    "valorant": "https://media.valorant-api.com/maps/7eaecc1b-4337-bbf6-6ab9-04b8f06b3319/splash.png",
+# ===========================================================================
+# OFFICIAL KEY-ART RESOLVER FOR NON-STEAM GAMES + MULTI-CDN COVER STACK
+# ===========================================================================
+OFFICIAL_GAME_PAGES = {
+    "valorant": "https://playvalorant.com/en-us/",
+    "league of legends": "https://www.leagueoflegends.com/en-us/",
+    "teamfight tactics": "https://teamfighttactics.leagueoflegends.com/en-us/",
+    "legends of runeterra": "https://playruneterra.com/en-us/",
+    "fortnite": "https://www.fortnite.com/",
+    "alan wake 2": "https://www.alanwake.com/",
+    "world of warcraft": "https://worldofwarcraft.blizzard.com/en-us/",
+    "hearthstone": "https://hearthstone.blizzard.com/en-us/",
+    "genshin impact": "https://genshin.hoyoverse.com/en/",
+    "honkai: star rail": "https://hsr.hoyoverse.com/en-us/",
+    "wuthering waves": "https://wutheringwaves.kurogames.com/en/",
+}
+
+DIRECT_VERIFIED_COVERS = {
+    # Overwatch 2 is officially on Steam (AppID 2357570)
+    "overwatch 2": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/2357570/header.jpg",
 }
 
 
-def resolve_cover_url(row: pd.Series) -> str:
+def _fetch_og_image_from_page(page_url: str) -> str:
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36"
+        ),
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+    }
+    try:
+        resp = requests.get(page_url, headers=headers, timeout=4.0, allow_redirects=True)
+        if resp.status_code != 200 or not resp.text:
+            return ""
+        html_doc = resp.text[:140000]
+        patterns = [
+            r'<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)["\']',
+            r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+property=["\']og:image["\']',
+            r'<meta[^>]+name=["\']twitter:image["\'][^>]+content=["\']([^"\']+)["\']',
+            r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+name=["\']twitter:image["\']',
+        ]
+        for pat in patterns:
+            m = re.search(pat, html_doc, flags=re.IGNORECASE)
+            if m:
+                img_u = html.unescape(m.group(1).strip())
+                if img_u.startswith("//"):
+                    img_u = "https:" + img_u
+                elif img_u.startswith("/"):
+                    img_u = urllib.parse.urljoin(resp.url, img_u)
+                if img_u.startswith("http"):
+                    return img_u
+    except Exception:
+        pass
+    return ""
+
+
+@st.cache_data(ttl=86400, show_spinner=False)
+def get_official_non_steam_covers() -> dict[str, str]:
+    resolved = dict(DIRECT_VERIFIED_COVERS)
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        fut_map = {
+            pool.submit(_fetch_og_image_from_page, url): title_key
+            for title_key, url in OFFICIAL_GAME_PAGES.items()
+        }
+        for fut in as_completed(fut_map):
+            t_key = fut_map[fut]
+            try:
+                og_url = fut.result()
+                if og_url:
+                    resolved[t_key] = og_url
+            except Exception:
+                pass
+    return resolved
+
+
+def resolve_cover_urls(row: pd.Series) -> list[str]:
+    """
+    Returns an ordered priority list of cover URLs for a game:
+      1. Live official key-art URL (for non-Steam titles)
+      2. Catalog header_image (if valid)
+      3. Current Valve Steam CDN URLs (for any Steam AppID so expired timestamps never black-screen)
+    """
+    urls: list[str] = []
     nm_key = str(row.get("name", "")).strip().lower()
-    if nm_key in NON_STEAM_COVER_OVERRIDES:
-        return NON_STEAM_COVER_OVERRIDES[nm_key]
+    aid = int(row.get("appid", 0) or 0)
+
+    official_map = get_official_non_steam_covers()
+    if nm_key in official_map and official_map[nm_key]:
+        urls.append(official_map[nm_key])
 
     raw_val = row.get("header_image")
     raw_url = "" if pd.isna(raw_val) else str(raw_val).strip()
-    if raw_url.lower() in ("", "nan", "none", "null"):
-        return ""
-    return raw_url
+    if raw_url.lower() not in ("", "nan", "none", "null") and raw_url.startswith("http"):
+        if raw_url not in urls:
+            urls.append(raw_url)
+
+    if 0 < aid < 9000000 and nm_key not in NON_STEAM_EXCLUSIVES:
+        steam_primary = f"https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/{aid}/header.jpg"
+        steam_backup = f"https://cdn.cloudflare.steamstatic.com/steam/apps/{aid}/header.jpg"
+        for u in (steam_primary, steam_backup):
+            if u not in urls:
+                urls.append(u)
+
+    return urls
 
 
 def render_cover_art(row: pd.Series, variant: str = "card") -> str:
     """
-    Renders a zero-JS layered cover container:
-      - Bottom layer: Styled HTML/CSS title banner (always visible if an external CDN fails)
-      - Top layer: CSS background-image photo (passes Streamlit DOMPurify cleanly)
+    Renders a zero-JS multi-layer cover container:
+      - Bottom layer: Styled HTML/CSS title banner (visible only if all CDNs fail)
+      - Top layer: CSS3 stacked background-image URLs (passes Streamlit DOMPurify cleanly)
     """
     g_name = str(row.get("name", "PC Game")).strip() or "PC Game"
     stores_val = row.get("verified_stores")
@@ -137,13 +228,15 @@ def render_cover_art(row: pd.Series, variant: str = "card") -> str:
     else:
         stores_str = str(stores_val).replace("|", " • ")
 
-    img_url = resolve_cover_url(row)
+    cover_urls = resolve_cover_urls(row)
     bg_size = "contain" if variant == "spot" else "cover"
-    photo_layer = (
-        f'<div class="cover-photo-layer" style="background-image: url(\'{html.escape(img_url)}\'); background-size: {bg_size};"></div>'
-        if img_url
-        else ""
-    )
+    if cover_urls:
+        bg_stack = ", ".join([f"url('{html.escape(u)}')" for u in cover_urls])
+        photo_layer = (
+            f'<div class="cover-photo-layer" style="background-image: {bg_stack}; background-size: {bg_size};"></div>'
+        )
+    else:
+        photo_layer = ""
 
     if variant == "spot":
         wrap_cls = "spot-media-col"
@@ -879,7 +972,7 @@ span[data-baseweb="tag"] {
     font-weight: 700;
 }
 
-/* Layered Zero-JS Cover Frame (Fallback Gradient Card + Photo Overlay) */
+/* Layered Zero-JS Cover Frame (Fallback Gradient Card + Multi-CDN Photo Overlay) */
 .cover-fallback-art {
     position: absolute;
     inset: 0;
