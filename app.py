@@ -6,6 +6,7 @@ Features:
   - Pre-indexed, cached multi-store filtering & sorting across 25,000+ PC games
   - Compact, streamlined "Explore & Genres" popover panel
   - Tactile mouse hover & click-press micro-interactions on all buttons, pills, and cards
+  - Live Steam storefront price sync (cards & spotlight always match the live modal price)
   - Official widescreen key-art resolver via Epic Games Store Catalog API, Blizzard media,
     and Valve Steam CDN headers (no map splashes, no transparent logos, no black boxes)
   - Isolated Insights & Charts page with honest 0–100% bar scale, leader-line donut,
@@ -179,7 +180,6 @@ def _fetch_epic_wide_key_art(search_title: str) -> str:
                 .get("elements", [])
             )
             target_low = search_title.strip().lower()
-            # Prefer exact title match first, then first element
             ordered_elems = sorted(
                 elements,
                 key=lambda el: 0 if str(el.get("title", "")).strip().lower() == target_low else 1,
@@ -652,7 +652,7 @@ def build_verified_store_links(name: str, appid: int, stores: list[str]) -> dict
 
 
 # ===========================================================================
-# LIVE TELEMETRY & VERIFIED REVIEWS
+# LIVE TELEMETRY, LIVE US STOREFRONT PRICES & VERIFIED REVIEWS
 # ===========================================================================
 @st.cache_data(ttl=600, show_spinner=False)
 def _fetch_single_live_ccu(appid: int) -> int | None:
@@ -687,6 +687,47 @@ def get_live_ccu_batch(appids_tuple: tuple[int, ...]) -> dict[int, int | None]:
                 out[aid] = fut.result()
             except Exception:
                 out[aid] = None
+    return out
+
+
+@st.cache_data(ttl=900, show_spinner=False)
+def get_live_steam_prices_batch(appids_tuple: tuple[int, ...]) -> dict[int, dict]:
+    """
+    Fetches real-time US Steam Storefront pricing for all visible AppIDs in a single
+    batched call so storefront cards and spotlight always match the live modal table.
+    """
+    valid_ids = sorted({int(a) for a in appids_tuple if 0 < int(a) < 9000000})
+    if not valid_ids:
+        return {}
+    out: dict[int, dict] = {}
+    try:
+        resp = requests.get(
+            "https://store.steampowered.com/api/appdetails",
+            params={
+                "appids": ",".join(str(a) for a in valid_ids),
+                "filters": "price_overview",
+                "cc": "US",
+            },
+            headers={"User-Agent": "Mozilla/5.0"},
+            timeout=2.5,
+        )
+        if resp.status_code == 200:
+            payload = resp.json() or {}
+            for aid in valid_ids:
+                entry = payload.get(str(aid))
+                if not isinstance(entry, dict) or not entry.get("success"):
+                    continue
+                data = entry.get("data")
+                if isinstance(data, dict) and "price_overview" in data:
+                    po = data["price_overview"]
+                    out[aid] = {
+                        "price_usd": round(float(po.get("initial", 0)) / 100.0, 2),
+                        "effective_price_usd": round(float(po.get("final", 0)) / 100.0, 2),
+                        "discount_pct": int(po.get("discount_percent", 0)),
+                        "is_free": False,
+                    }
+    except Exception:
+        pass
     return out
 
 
@@ -1750,11 +1791,19 @@ def review_sentiment_label(wilson: float) -> str:
     return "Mixed"
 
 
-def format_price_badge(row: pd.Series) -> str:
-    disc = int(row.get("discount_pct", 0))
-    eff = float(row.get("effective_price_usd", row.get("price_usd", 0.0)))
-    base = float(row.get("price_usd", 0.0))
-    is_f = bool(row.get("is_free", False))
+def format_price_badge(row: pd.Series, live_price_map: dict[int, dict] | None = None) -> str:
+    aid = int(row.get("appid", 0))
+    live_p = (live_price_map or {}).get(aid)
+    if live_p:
+        disc = int(live_p.get("discount_pct", 0))
+        eff = float(live_p.get("effective_price_usd", 0.0))
+        base = float(live_p.get("price_usd", 0.0))
+        is_f = bool(live_p.get("is_free", False))
+    else:
+        disc = int(row.get("discount_pct", 0))
+        eff = float(row.get("effective_price_usd", row.get("price_usd", 0.0)))
+        base = float(row.get("price_usd", 0.0))
+        is_f = bool(row.get("is_free", False))
 
     if disc > 0:
         return f'<span class="sale-tag">-{disc}% • ${eff:.2f}</span>'
@@ -2215,7 +2264,9 @@ def render_featured_spotlight_fragment() -> None:
         bool(st.session_state["hide_aaa"]),
         int(st.session_state["spotlight_seed"]),
     )
-    spot_ccu_map = get_live_ccu_batch(tuple(int(a) for a in spotlight_pool["appid"].tolist()))
+    spot_ids_tuple = tuple(int(a) for a in spotlight_pool["appid"].tolist())
+    spot_ccu_map = get_live_ccu_batch(spot_ids_tuple)
+    spot_price_map = get_live_steam_prices_batch(spot_ids_tuple)
 
     s_idx = int(st.session_state["spotlight_idx"]) % len(spotlight_pool)
     anim_tick = int(st.session_state.get("spot_anim_tick", 0))
@@ -2234,7 +2285,7 @@ def render_featured_spotlight_fragment() -> None:
     wilson_s = float(spot_row["wilson_score"])
     revs_s = int(spot_row["total_reviews"])
     shadow_txt = format_shadow_event(spot_row)
-    price_html = format_price_badge(spot_row)
+    price_html = format_price_badge(spot_row, spot_price_map)
     s_badges, s_links = format_store_badges_and_links(spot_row)
 
     kicker_txt = (
@@ -2530,7 +2581,9 @@ def render_catalog_browser_fragment(min_year: int, max_year: int) -> None:
         )
 
     page_slice = filtered.iloc[start_idx:end_idx].reset_index(drop=True)
-    live_ccu_map = get_live_ccu_batch(tuple(int(a) for a in page_slice["appid"].tolist()))
+    page_ids_tuple = tuple(int(a) for a in page_slice["appid"].tolist())
+    live_ccu_map = get_live_ccu_batch(page_ids_tuple)
+    live_price_map = get_live_steam_prices_batch(page_ids_tuple)
 
     for r_start in range(0, len(page_slice), 3):
         cols = st.columns(3, gap="medium")
@@ -2544,7 +2597,7 @@ def render_catalog_browser_fragment(min_year: int, max_year: int) -> None:
                 with st.container(border=True):
                     st.markdown(render_cover_art(row, variant="card"), unsafe_allow_html=True)
 
-                    price_html = format_price_badge(row)
+                    price_html = format_price_badge(row, live_price_map)
                     ccu_html = format_live_players_badge(row, live_ccu_map)
                     st.markdown(
                         f'<div class="card-top-row">{ccu_html}{price_html}</div>',
